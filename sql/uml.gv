@@ -1,0 +1,104 @@
+digraph {
+    Client [
+        label="{
+            Client|
+            +ClientID : int\l
+            +LastName : string\l
+            +FirstName : string\l
+            +MiddleName : string\l
+            +BirthDate : date\l
+            +PassportSeries : string\l
+            +PassportNumber : string\l
+            +Address : string\l
+            +Phone : string\l
+        }"
+    ]
+
+    Car [
+        label="{
+            Car|
+            +CarID : int\l
+            +Brand : string\l
+            +Color : string\l
+            +Year : int\l
+            +StateNumber : string\l
+            +ClientID : int\l
+        }"
+    ]
+    
+    Worker [
+        label="{
+            Worker|
+            +WorkerID : int\l
+            +LastName : string\l
+            +FirstName : string\l
+            +MiddleName : string\l
+            +Specialty : string\l
+            +Grade : int\l
+            +ExperienceYears : int\l
+            +Status : string\l
+        }"
+    ]
+    
+    Service [
+        label="{
+            Service|
+            +ServiceID : int\l
+            +Name : string\l
+            +Description : string\l
+            +HourCost : decimal\l
+        }"
+    ]
+    
+    Orders [
+        label="{
+            Orders|
+            +OrderID : int\l
+            +ClientID : int\l
+            +CarID : int\l
+            +DateIn : date\l
+            +DatePromised : date\l
+            +DateOut : date\l
+            +Status : string\l
+        }"
+    ]
+    
+    OrderFault [
+        label="{
+            OrderFault|
+            +FaultID : int\l
+            +OrderID : int\l
+            +FaultDescription : string\l
+        }"
+    ]
+    
+    OrderService [
+        label="{
+            OrderService|
+            +PositionID : int\l
+            +OrderID : int\l
+            +ServiceID : int\l
+            +WorkHours : decimal\l
+            +WorkCost : decimal\l
+            +PartsCost : decimal\l
+        }"
+    ]
+    
+    OrderWorker [
+        label="{
+            OrderWorker|
+            +RecordID : int\l
+            +OrderID : int\l
+            +WorkerID : int\l
+        }"
+    ]
+    
+    Client -> Car [label="ClientID"]
+    Client -> Orders [label="ClientID"];
+    Car -> Orders [label="CarID"];
+    Orders -> OrderFault [label="OrderID"];
+    Orders -> OrderService [label="OrderID"];
+    Orders -> OrderWorker [label="OrderID"];
+    Service -> OrderService [label="ServiceID"];
+    Worker -> OrderWorker [label="WorkerID"];
+}
