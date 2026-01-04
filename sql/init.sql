@@ -1,5 +1,6 @@
+CREATE SEQUENCE ClientIDSequence START 1;
 CREATE TABLE Client (
-    ClientID SERIAL PRIMARY KEY,
+    ClientID INTEGER PRIMARY KEY DEFAULT nextval('ClientIDSequence'),
     LastName VARCHAR(50),
     FirstName VARCHAR(50),
     MiddleName VARCHAR(50),
@@ -10,8 +11,9 @@ CREATE TABLE Client (
     Phone VARCHAR(20)
 );
 
+CREATE SEQUENCE CarIDSequence START 1;
 CREATE TABLE Car (
-    CarID SERIAL PRIMARY KEY,
+    CarID INTEGER PRIMARY KEY DEFAULT nextval('CarIDSequence'),
     Brand VARCHAR(50),
     Color VARCHAR(30),
     Year INT,
@@ -20,8 +22,9 @@ CREATE TABLE Car (
     FOREIGN KEY (ClientID) REFERENCES Client(ClientID)
 );
 
+CREATE SEQUENCE WorkerIDSequence START 1;
 CREATE TABLE Worker (
-    WorkerID SERIAL PRIMARY KEY,
+    WorkerID INTEGER PRIMARY KEY DEFAULT nextval('WorkerIDSequence'),
     LastName VARCHAR(50),
     FirstName VARCHAR(50),
     MiddleName VARCHAR(50),
@@ -31,15 +34,17 @@ CREATE TABLE Worker (
     Status VARCHAR(20)
 );
 
+CREATE SEQUENCE ServiceIDSequence START 1;
 CREATE TABLE Service (
-    ServiceID SERIAL PRIMARY KEY,
+    ServiceID INTEGER PRIMARY KEY DEFAULT nextval('ServiceIDSequence'),
     Name VARCHAR(100),
     Description VARCHAR(200),
     HourCost DECIMAL(10,2)
 );
 
+CREATE SEQUENCE OrderIDSequence START 1;
 CREATE TABLE Orders (
-    OrderID SERIAL PRIMARY KEY,
+    OrderID INTEGER PRIMARY KEY DEFAULT nextval('OrderIDSequence'),
     ClientID INT,
     CarID INT,
     DateIn DATE,
@@ -50,15 +55,17 @@ CREATE TABLE Orders (
     FOREIGN KEY (CarID) REFERENCES Car(CarID)
 );
 
+CREATE SEQUENCE FaultIDSequence START 1;
 CREATE TABLE OrderFault (
-    FaultID SERIAL PRIMARY KEY,
+    FaultID INTEGER PRIMARY KEY DEFAULT nextval('FaultIDSequence'),
     OrderID INT,
     FaultDescription VARCHAR(200),
     FOREIGN KEY (OrderID) REFERENCES Orders(OrderID)
 );
 
+CREATE SEQUENCE PositionIDSequence START 1;
 CREATE TABLE OrderService (
-    PositionID SERIAL PRIMARY KEY,
+    PositionID INTEGER PRIMARY KEY DEFAULT nextval('PositionIDSequence'),
     OrderID INT,
     ServiceID INT,
     WorkHours DECIMAL(5,2),
@@ -68,8 +75,9 @@ CREATE TABLE OrderService (
     FOREIGN KEY (ServiceID) REFERENCES Service(ServiceID)
 );
 
+CREATE SEQUENCE RecordIDSequence START 1;
 CREATE TABLE OrderWorker (
-    RecordID SERIAL PRIMARY KEY,
+    RecordID INTEGER PRIMARY KEY DEFAULT nextval('RecordIDSequence'),
     OrderID INT,
     WorkerID INT,
     FOREIGN KEY (OrderID) REFERENCES Orders(OrderID),
